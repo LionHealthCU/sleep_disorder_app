@@ -9,9 +9,15 @@ import SwiftUI
 
 @main
 struct SomniQApp: App {
+    @StateObject private var dataManager = DataManager()
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if dataManager.isSetupComplete {
+                DashboardView(dataManager: dataManager)
+            } else {
+                SetupView(dataManager: dataManager)
+            }
         }
     }
 }

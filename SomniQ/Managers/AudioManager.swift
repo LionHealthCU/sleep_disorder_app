@@ -7,9 +7,15 @@ class AudioManager: NSObject, ObservableObject {
     @Published var recordingDuration: TimeInterval = 0
     @Published var hasPermission = false
     
-    private var audioRecorder: AVAudioRecorder?
+    private var audioEngine: AVAudioEngine?
+    private var audioFile: AVAudioFile?
     private var recordingTimer: Timer?
     private var recordingStartTime: Date?
+    private var outputFileURL: URL?
+    
+    // Placeholder for SAudioStreamAnalyzer
+    // var streamAnalyzer: SAudioStreamAnalyzer?
+    var onBuffer: ((AVAudioPCMBuffer, AVAudioTime) -> Void)?
     
     override init() {
         super.init()
@@ -46,50 +52,59 @@ class AudioManager: NSObject, ObservableObject {
         }
         
         let audioSession = AVAudioSession.sharedInstance()
-        
         do {
             try audioSession.setCategory(.playAndRecord, mode: .default)
             try audioSession.setActive(true)
             
+            let engine = AVAudioEngine()
+            let inputNode = engine.inputNode
+            let format = inputNode.outputFormat(forBus: 0)
+            
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let recordingName = "sleep_recording_\(Date().timeIntervalSince1970).m4a"
+            let recordingName = "sleep_recording_\(Date().timeIntervalSince1970).caf"
             let recordingURL = documentsPath.appendingPathComponent(recordingName)
+            outputFileURL = recordingURL
+            audioFile = try AVAudioFile(forWriting: recordingURL, settings: format.settings)
             
-            let settings: [String: Any] = [
-                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-                AVSampleRateKey: 44100.0,
-                AVNumberOfChannelsKey: 1,
-                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-            ]
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] (buffer, time) in
+                guard let self = self else { return }
+                do {
+                    try self.audioFile?.write(from: buffer)
+                } catch {
+                    print("Failed to write buffer: \(error)")
+                }
+                // Real-time analysis placeholder
+                self.onBuffer?(buffer, time)
+                // self.streamAnalyzer?.analyze(buffer: buffer, at: time)
+            }
             
-            audioRecorder = try AVAudioRecorder(url: recordingURL, settings: settings)
-            audioRecorder?.delegate = self
-            audioRecorder?.record()
+            engine.prepare()
+            try engine.start()
             
+            audioEngine = engine
             isRecording = true
             recordingStartTime = Date()
             startTimer()
-            
         } catch {
-            print("Failed to start recording: \(error)")
+            print("Failed to start AVAudioEngine recording: \(error)")
         }
     }
     
     func stopRecording() -> URL? {
-        audioRecorder?.stop()
+        guard let engine = audioEngine else { return nil }
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
         isRecording = false
         stopTimer()
-        
-        let recordingURL = audioRecorder?.url
-        audioRecorder = nil
-        
+        let url = outputFileURL
+        audioFile = nil
+        outputFileURL = nil
         do {
             try AVAudioSession.sharedInstance().setActive(false)
         } catch {
             print("Failed to deactivate audio session: \(error)")
         }
-        
-        return recordingURL
+        return url
     }
     
     // MARK: - Timer
@@ -131,21 +146,6 @@ class AudioManager: NSObject, ObservableObject {
             return String(format: "%d:%02d:%02d", hours, minutes, seconds)
         } else {
             return String(format: "%d:%02d", minutes, seconds)
-        }
-    }
-}
-
-// MARK: - AVAudioRecorderDelegate
-extension AudioManager: AVAudioRecorderDelegate {
-    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
-        if !flag {
-            print("Recording failed")
-        }
-    }
-    
-    func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
-        if let error = error {
-            print("Recording error: \(error)")
         }
     }
 } 
