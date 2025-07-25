@@ -24,22 +24,43 @@ class AudioManager: NSObject, ObservableObject {
     
     // MARK: - Permission
     func checkPermission() {
-        switch AVAudioSession.sharedInstance().recordPermission {
-        case .granted:
-            hasPermission = true
-        case .denied:
-            hasPermission = false
-        case .undetermined:
-            requestPermission()
-        @unknown default:
-            hasPermission = false
+        if #available(iOS 17.0, *) {
+            switch AVAudioApplication.shared.recordPermission {
+            case .granted:
+                hasPermission = true
+            case .denied:
+                hasPermission = false
+            case .undetermined:
+                requestPermission()
+            @unknown default:
+                hasPermission = false
+            }
+        } else {
+            switch AVAudioSession.sharedInstance().recordPermission {
+            case .granted:
+                hasPermission = true
+            case .denied:
+                hasPermission = false
+            case .undetermined:
+                requestPermission()
+            @unknown default:
+                hasPermission = false
+            }
         }
     }
     
     func requestPermission() {
-        AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
-            DispatchQueue.main.async {
-                self?.hasPermission = granted
+        if #available(iOS 17.0, *) {
+            AVAudioApplication.requestRecordPermission { [weak self] granted in
+                DispatchQueue.main.async {
+                    self?.hasPermission = granted
+                }
+            }
+        } else {
+            AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
+                DispatchQueue.main.async {
+                    self?.hasPermission = granted
+                }
             }
         }
     }
