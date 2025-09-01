@@ -8,6 +8,7 @@ struct AudioRecordingView: View {
     @State private var showingPermissionAlert = false
     @State private var showingSaveAlert = false
     @State private var recordingName = ""
+    @State private var showingSummary = false
     
     var body: some View {
         NavigationView {
@@ -37,11 +38,16 @@ struct AudioRecordingView: View {
                     Text("Sleep Audio Recording")
                         .font(.headline)
                     
-                    Text("Place your device near your bed to capture sleep sounds. This can help identify patterns like snoring, gasping, or other sleep-related sounds.")
+                    Text("Place your device near your bed to capture sleep sounds. The app will automatically detect and classify sounds like snoring, breathing, and other sleep-related audio.")
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                }
+                
+                // Real-time Sound Detection
+                if audioManager.isRecording {
+                    RealTimeSoundDetectionView(audioManager: audioManager)
                 }
                 
                 Spacer()
@@ -54,7 +60,7 @@ struct AudioRecordingView: View {
                                 .font(.headline)
                                 .foregroundColor(.red)
                             
-                            Text("SomniQ needs access to your microphone to record sleep sounds.")
+                            Text("SomniQ needs access to your microphone to record and analyze sleep sounds.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
@@ -100,53 +106,48 @@ struct AudioRecordingView: View {
                     }
                 }
                 
-                // Recent recordings
-                if !dataManager.audioRecordings.isEmpty {
-                    VStack(spacing: 16) {
-                        Text("Recent Recordings")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        ScrollView {
-                            LazyVStack(spacing: 8) {
-                                ForEach(dataManager.audioRecordings.prefix(5)) { recording in
-                                    RecordingRow(recording: recording, audioManager: audioManager)
-                                }
-                            }
-                        }
-                        .frame(maxHeight: 200)
+                // Show summary button if recording is complete
+                if let summary = audioManager.recordingSummary {
+                    Button("View Recording Summary") {
+                        showingSummary = true
                     }
+                    .buttonStyle(.borderedProminent)
                 }
             }
             .padding()
             .navigationTitle("Audio Recording")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
                         dismiss()
                     }
                 }
             }
-        }
-        .alert("Save Recording", isPresented: $showingSaveAlert) {
-            TextField("Recording name", text: $recordingName)
-            Button("Save") {
-                saveRecording()
+            .alert("Microphone Permission", isPresented: $showingPermissionAlert) {
+                Button("Settings") {
+                    if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsURL)
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Please enable microphone access in Settings to record sleep sounds.")
             }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Enter a name for this recording")
-        }
-        .alert("Microphone Permission", isPresented: $showingPermissionAlert) {
-            Button("Settings") {
-                if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(settingsUrl)
+            .alert("Save Recording", isPresented: $showingSaveAlert) {
+                TextField("Recording Name", text: $recordingName)
+                Button("Save") {
+                    saveRecording()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Enter a name for your sleep recording.")
+            }
+            .sheet(isPresented: $showingSummary) {
+                if let summary = audioManager.recordingSummary {
+                    RecordingSummaryView(summary: summary)
                 }
             }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Please enable microphone access in Settings to record audio.")
         }
     }
     
@@ -179,56 +180,254 @@ struct AudioRecordingView: View {
     }
 }
 
+// MARK: - Real-time Sound Detection View
+struct RealTimeSoundDetectionView: View {
+    @ObservedObject var audioManager: AudioManager
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Live Sound Detection")
+                .font(.headline)
+                .foregroundColor(.primary)
+            
+            if audioManager.detectedSounds.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "ear")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Listening for sounds...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+            } else {
+                // Current detections
+                VStack(spacing: 12) {
+                    ForEach(audioManager.detectedSounds.suffix(3)) { sound in
+                        HStack {
+                            Image(systemName: soundIcon(for: sound.soundName))
+                                .foregroundColor(soundColor(for: sound.soundName))
+                                .font(.title3)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(sound.soundName.capitalized)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                Text("\(Int(sound.confidence * 100))% confidence")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Text(sound.timestamp, style: .time)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+        .shadow(radius: 2)
+    }
+    
+    private func soundIcon(for soundName: String) -> String {
+        let lowercased = soundName.lowercased()
+        if lowercased.contains("snore") || lowercased.contains("breathing") {
+            return "lungs.fill"
+        } else if lowercased.contains("speech") || lowercased.contains("talk") {
+            return "person.wave.2"
+        } else if lowercased.contains("music") {
+            return "music.note"
+        } else if lowercased.contains("silence") {
+            return "speaker.slash"
+        } else {
+            return "waveform"
+        }
+    }
+    
+    private func soundColor(for soundName: String) -> Color {
+        let lowercased = soundName.lowercased()
+        if lowercased.contains("snore") || lowercased.contains("breathing") {
+            return .orange
+        } else if lowercased.contains("speech") || lowercased.contains("talk") {
+            return .blue
+        } else if lowercased.contains("music") {
+            return .purple
+        } else if lowercased.contains("silence") {
+            return .gray
+        } else {
+            return .green
+        }
+    }
+}
+
+// MARK: - Recording Summary View
+struct RecordingSummaryView: View {
+    let summary: RecordingSummary
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Recording Summary")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text(summary.recordingDate, style: .date)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    // Statistics
+                    LazyVGrid(columns: [
+                        GridItem(.flexible()),
+                        GridItem(.flexible())
+                    ], spacing: 16) {
+                        StatCard(title: "Duration", value: formatDuration(summary.duration), icon: "clock", color: .blue)
+                        StatCard(title: "Detections", value: "\(summary.totalDetections)", icon: "waveform", color: .green)
+                        StatCard(title: "Most Common", value: summary.mostCommonSound?.capitalized ?? "None", icon: "chart.bar", color: .orange)
+                        StatCard(title: "Unique Sounds", value: "\(Set(summary.detectedSounds.map { $0.soundName }).count)", icon: "list.bullet", color: .purple)
+                    }
+                    
+                    // Sound Timeline
+                    if !summary.detectedSounds.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Detected Sounds")
+                                .font(.headline)
+                            
+                            LazyVStack(spacing: 8) {
+                                ForEach(summary.detectedSounds.suffix(20)) { sound in
+                                    HStack {
+                                        Image(systemName: soundIcon(for: sound.soundName))
+                                            .foregroundColor(soundColor(for: sound.soundName))
+                                            .font(.title3)
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(sound.soundName.capitalized)
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                            
+                                            Text("\(Int(sound.confidence * 100))% confidence")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        Text(sound.timestamp, style: .time)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(8)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Summary")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let hours = Int(duration) / 3600
+        let minutes = Int(duration) / 60 % 60
+        let seconds = Int(duration) % 60
+        
+        if hours > 0 {
+            return String(format: "%dh %dm", hours, minutes)
+        } else {
+            return String(format: "%dm %ds", minutes, seconds)
+        }
+    }
+    
+    private func soundIcon(for soundName: String) -> String {
+        let lowercased = soundName.lowercased()
+        if lowercased.contains("snore") || lowercased.contains("breathing") {
+            return "lungs.fill"
+        } else if lowercased.contains("speech") || lowercased.contains("talk") {
+            return "person.wave.2"
+        } else if lowercased.contains("music") {
+            return "music.note"
+        } else if lowercased.contains("silence") {
+            return "speaker.slash"
+        } else {
+            return "waveform"
+        }
+    }
+    
+    private func soundColor(for soundName: String) -> Color {
+        let lowercased = soundName.lowercased()
+        if lowercased.contains("snore") || lowercased.contains("breathing") {
+            return .orange
+        } else if lowercased.contains("speech") || lowercased.contains("talk") {
+            return .blue
+        } else if lowercased.contains("music") {
+            return .purple
+        } else if lowercased.contains("silence") {
+            return .gray
+        } else {
+            return .green
+        }
+    }
+}
+
+
+
 struct RecordingRow: View {
     let recording: AudioRecording
-    let audioManager: AudioManager
-    @State private var isPlaying = false
     
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(recording.date, formatter: dateFormatter)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                Text(recording.fileURL.lastPathComponent)
+                    .font(.headline)
                 
-                Text(audioManager.formatDuration(recording.duration))
+                Text(recording.date, style: .date)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
             Spacer()
             
-            Button(action: playRecording) {
-                Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.blue)
-            }
+            Text(formatDuration(recording.duration))
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
+        .padding(.vertical, 4)
     }
     
-    private func playRecording() {
-        if isPlaying {
-            isPlaying = false
-            // Stop playback logic would go here
-        } else {
-            isPlaying = true
-            audioManager.playRecording(url: recording.fileURL)
-            
-            // Simulate playback ending
-            DispatchQueue.main.asyncAfter(deadline: .now() + recording.duration) {
-                isPlaying = false
-            }
-        }
-    }
-    
-    private var dateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 
