@@ -167,20 +167,15 @@ struct AudioRecordingView: View {
     }
     
     private func saveRecording() {
-        guard let recordingURL = audioManager.stopRecording() else { return }
+        guard let recordingSummary = audioManager.recordingSummary else { 
+            print("❌ No recording summary found")
+            return 
+        }
         
-        // Create enhanced recording with analysis data
-        let recording = AudioRecording(
-            date: Date(),
-            duration: audioManager.recordingDuration,
-            fileURL: recordingURL,
-            episodeId: nil,
-            detectedSounds: audioManager.detectedSounds,
-            mostCommonSound: audioManager.detectedSounds.isEmpty ? nil : Dictionary(grouping: audioManager.detectedSounds, by: { $0.soundName }).max(by: { $0.value.count < $1.value.count })?.key,
-            totalDetections: audioManager.detectedSounds.count,
-            uniqueSoundCount: Set(audioManager.detectedSounds.map { $0.soundName }).count
-        )
+        // Create AudioRecording from RecordingSummary (this has all the final data)
+        let recording = AudioRecording(from: recordingSummary)
         
+        print("💾 Saving recording from summary: \(recording.duration)s duration, \(recording.totalDetections) sounds detected")
         dataManager.addAudioRecording(recording)
         dismiss()
     }
