@@ -2,10 +2,12 @@ import SwiftUI
 
 struct DashboardView: View {
     @ObservedObject var dataManager: DataManager
+    @EnvironmentObject var authManager: AuthManager
     @State private var showingRecordAudio = false
     @State private var showingSelfReport = false
     @State private var showingHealthKit = false
     @State private var showingCommunity = false
+    @State private var showSignOutAlert = false
     
     var body: some View {
         NavigationView {
@@ -40,10 +42,26 @@ struct DashboardView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(destination: DataView(dataManager: dataManager)) {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
+                    HStack {
+                        Button("Sign Out") {
+                            showSignOutAlert = true
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        
+                        NavigationLink(destination: DataView(dataManager: dataManager)) {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                        }
                     }
                 }
+            }
+            .alert("Sign Out", isPresented: $showSignOutAlert) {
+                Button("Sign Out", role: .destructive) {
+                    authManager.signOut()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Are you sure you want to sign out?")
             }
         }
         .sheet(isPresented: $showingRecordAudio) {

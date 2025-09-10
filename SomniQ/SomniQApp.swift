@@ -6,17 +6,29 @@
 //
 
 import SwiftUI
+import FirebaseCore
 
 @main
 struct SomniQApp: App {
     @StateObject private var dataManager = DataManager()
+    @StateObject private var authManager = AuthManager()
+    
+    init() {
+        FirebaseApp.configure()
+    }
     
     var body: some Scene {
         WindowGroup {
-            if dataManager.isSetupComplete {
-                DashboardView(dataManager: dataManager)
+            if authManager.isAuthenticated {
+                if dataManager.isSetupComplete {
+                    DashboardView(dataManager: dataManager)
+                        .environmentObject(authManager)
+                } else {
+                    SetupView(dataManager: dataManager)
+                }
             } else {
-                SetupView(dataManager: dataManager)
+                LoginView()
+                    .environmentObject(authManager)
             }
         }
     }

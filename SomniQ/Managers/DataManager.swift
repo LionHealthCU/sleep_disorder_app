@@ -9,6 +9,7 @@ class DataManager: ObservableObject {
     @Published var communityPosts: [CommunityPost] = []
     @Published var isSetupComplete: Bool = false
     
+    private var currentUserId: String?
     private let episodesKey = "sleepEpisodes"
     private let recordingsKey = "audioRecordings"
     private let preferencesKey = "userPreferences"
@@ -21,6 +22,51 @@ class DataManager: ObservableObject {
         
         loadData()
         // App now collects and stores real user data
+        
+        // Listen for user authentication changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userDidSignIn(_:)),
+            name: .userDidSignIn,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userDidSignOut(_:)),
+            name: .userDidSignOut,
+            object: nil
+        )
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    @objc private func userDidSignIn(_ notification: Notification) {
+        if let userId = notification.object as? String {
+            setCurrentUser(userId)
+        }
+    }
+    
+    @objc private func userDidSignOut(_ notification: Notification) {
+        // Clear current user data when signing out
+        currentUserId = nil
+        episodes = []
+        audioRecordings = []
+        userPreferences = nil
+        communityPosts = []
+        isSetupComplete = false
+    }
+    
+    func setCurrentUser(_ userId: String) {
+        self.currentUserId = userId
+        loadData()
+    }
+    
+    private func userSpecificKey(_ baseKey: String) -> String {
+        guard let userId = currentUserId else { return baseKey }
+        return "\(baseKey)_\(userId)"
     }
     
     private func clearMockDataOnce() {
@@ -44,48 +90,48 @@ class DataManager: ObservableObject {
     
     // MARK: - Data Persistence
     private func loadData() {
-        if let data = UserDefaults.standard.data(forKey: episodesKey),
+        if let data = UserDefaults.standard.data(forKey: userSpecificKey(episodesKey)),
            let episodes = try? JSONDecoder().decode([SleepEpisode].self, from: data) {
             self.episodes = episodes
         }
         
-        if let data = UserDefaults.standard.data(forKey: recordingsKey),
+        if let data = UserDefaults.standard.data(forKey: userSpecificKey(recordingsKey)),
            let recordings = try? JSONDecoder().decode([AudioRecording].self, from: data) {
             self.audioRecordings = recordings
         }
         
-        if let data = UserDefaults.standard.data(forKey: preferencesKey),
+        if let data = UserDefaults.standard.data(forKey: userSpecificKey(preferencesKey)),
            let preferences = try? JSONDecoder().decode(UserPreferences.self, from: data) {
             self.userPreferences = preferences
         }
         
-        if let data = UserDefaults.standard.data(forKey: postsKey),
+        if let data = UserDefaults.standard.data(forKey: userSpecificKey(postsKey)),
            let posts = try? JSONDecoder().decode([CommunityPost].self, from: data) {
             self.communityPosts = posts
         }
         
-        self.isSetupComplete = UserDefaults.standard.bool(forKey: setupKey)
+        self.isSetupComplete = UserDefaults.standard.bool(forKey: userSpecificKey(setupKey))
     }
     
     private func saveData() {
         if let data = try? JSONEncoder().encode(episodes) {
-            UserDefaults.standard.set(data, forKey: episodesKey)
+            UserDefaults.standard.set(data, forKey: userSpecificKey(episodesKey))
         }
         
         if let data = try? JSONEncoder().encode(audioRecordings) {
-            UserDefaults.standard.set(data, forKey: recordingsKey)
+            UserDefaults.standard.set(data, forKey: userSpecificKey(recordingsKey))
         }
         
         if let preferences = userPreferences,
            let data = try? JSONEncoder().encode(preferences) {
-            UserDefaults.standard.set(data, forKey: preferencesKey)
+            UserDefaults.standard.set(data, forKey: userSpecificKey(preferencesKey))
         }
         
         if let data = try? JSONEncoder().encode(communityPosts) {
-            UserDefaults.standard.set(data, forKey: postsKey)
+            UserDefaults.standard.set(data, forKey: userSpecificKey(postsKey))
         }
         
-        UserDefaults.standard.set(isSetupComplete, forKey: setupKey)
+        UserDefaults.standard.set(isSetupComplete, forKey: userSpecificKey(setupKey))
     }
     
     // MARK: - Episode Management
@@ -130,8 +176,8 @@ class DataManager: ObservableObject {
     func resetSetup() {
         isSetupComplete = false
         userPreferences = nil
-        UserDefaults.standard.removeObject(forKey: setupKey)
-        UserDefaults.standard.removeObject(forKey: preferencesKey)
+        UserDefaults.standard.removeObject(forKey: userSpecificKey(setupKey))
+        UserDefaults.standard.removeObject(forKey: userSpecificKey(preferencesKey))
     }
     
     // MARK: - Community Posts

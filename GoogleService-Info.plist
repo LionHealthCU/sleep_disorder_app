@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>1056076116118-haacajvl47lsk2lah8igp9cji712qqni.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.1056076116118-haacajvl47lsk2lah8igp9cji712qqni</string>
+	<key>API_KEY</key>
+	<string>AIzaSyCx8Yo1ci5eChVCSIUa7hinuNJKUmeU7e0</string>
+	<key>GCM_SENDER_ID</key>
+	<string>1056076116118</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.rahimitra.SomniQDev</string>
+	<key>PROJECT_ID</key>
+	<string>somniq-sleep-disorder</string>
+	<key>STORAGE_BUCKET</key>
+	<string>somniq-sleep-disorder.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:1056076116118:ios:9f5ff002763ce4b8ddd2b7</string>
+</dict>
+</plist>
