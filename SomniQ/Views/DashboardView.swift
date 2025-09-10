@@ -22,6 +22,9 @@ struct DashboardView: View {
                     
                     // Recent episodes
                     recentEpisodesSection
+                    
+                    // Recent recordings
+                    recentRecordingsSection
                 }
                 .padding()
             }
@@ -96,6 +99,7 @@ struct DashboardView: View {
             StatCard(
                 title: "Recordings",
                 value: "\(dataManager.audioRecordings.count)",
+                subtitle: dataManager.audioRecordings.isEmpty ? "No recordings yet" : "\(dataManager.audioRecordings.filter { $0.totalDetections > 0 }.count) with sounds",
                 icon: "mic.fill",
                 color: .green
             )
@@ -219,6 +223,47 @@ struct DashboardView: View {
         return dataManager.episodes.filter { $0.date >= weekAgo }.count
     }
     
+    private var recentRecordingsSection: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Recent Recordings")
+                    .font(.headline)
+                
+                Spacer()
+                
+                NavigationLink("View All", destination: DataView(dataManager: dataManager))
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            }
+            
+            if dataManager.audioRecordings.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "mic.fill")
+                        .font(.title)
+                        .foregroundColor(.secondary)
+                    
+                    Text("No recordings yet")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Tap 'Record Audio' to capture your first sleep sounds")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(Array(dataManager.audioRecordings.prefix(3))) { recording in
+                        RecordingRow(recording: recording)
+                    }
+                }
+            }
+        }
+    }
+    
     private var timeFormatter: DateFormatter {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
@@ -229,8 +274,17 @@ struct DashboardView: View {
 struct StatCard: View {
     let title: String
     let value: String
+    let subtitle: String?
     let icon: String
     let color: Color
+    
+    init(title: String, value: String, subtitle: String? = nil, icon: String, color: Color) {
+        self.title = title
+        self.value = value
+        self.subtitle = subtitle
+        self.icon = icon
+        self.color = color
+    }
     
     var body: some View {
         VStack(spacing: 8) {
@@ -245,6 +299,14 @@ struct StatCard: View {
             Text(title)
                 .font(.caption)
                 .foregroundColor(.secondary)
+            
+            if let subtitle = subtitle {
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding()
@@ -316,6 +378,70 @@ struct EpisodeRow: View {
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(8)
+    }
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }
+}
+
+struct RecordingRow: View {
+    let recording: AudioRecording
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "mic.fill")
+                .foregroundColor(.green)
+                .frame(width: 24)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(formatDuration(recording.duration))
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Text(recording.date, formatter: dateFormatter)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if recording.totalDetections > 0 {
+                    Text("\(recording.totalDetections) sounds detected")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            if let mostCommon = recording.mostCommonSound {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(mostCommon.capitalized)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                    
+                    Text("\(recording.uniqueSoundCount) unique")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(8)
+    }
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let hours = Int(duration) / 3600
+        let minutes = Int(duration) / 60 % 60
+        
+        if hours > 0 {
+            return String(format: "%dh %dm", hours, minutes)
+        } else {
+            return String(format: "%dm", minutes)
+        }
     }
     
     private var dateFormatter: DateFormatter {

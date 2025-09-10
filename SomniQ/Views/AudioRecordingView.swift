@@ -169,10 +169,16 @@ struct AudioRecordingView: View {
     private func saveRecording() {
         guard let recordingURL = audioManager.stopRecording() else { return }
         
+        // Create enhanced recording with analysis data
         let recording = AudioRecording(
             date: Date(),
             duration: audioManager.recordingDuration,
-            fileURL: recordingURL
+            fileURL: recordingURL,
+            episodeId: nil,
+            detectedSounds: audioManager.detectedSounds,
+            mostCommonSound: audioManager.detectedSounds.isEmpty ? nil : Dictionary(grouping: audioManager.detectedSounds, by: { $0.soundName }).max(by: { $0.value.count < $1.value.count })?.key,
+            totalDetections: audioManager.detectedSounds.count,
+            uniqueSoundCount: Set(audioManager.detectedSounds.map { $0.soundName }).count
         )
         
         dataManager.addAudioRecording(recording)
@@ -401,35 +407,6 @@ struct RecordingSummaryView: View {
 
 
 
-struct RecordingRow: View {
-    let recording: AudioRecording
-    
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(recording.fileURL.lastPathComponent)
-                    .font(.headline)
-                
-                Text(recording.date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-            
-            Text(formatDuration(recording.duration))
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding(.vertical, 4)
-    }
-    
-    private func formatDuration(_ duration: TimeInterval) -> String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-}
 
 #Preview {
     AudioRecordingView(dataManager: DataManager())

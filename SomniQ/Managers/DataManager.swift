@@ -16,8 +16,30 @@ class DataManager: ObservableObject {
     private let setupKey = "isSetupComplete"
     
     init() {
+        // Clear mock data only once, then start collecting real user data
+        clearMockDataOnce()
+        
         loadData()
-        loadSampleDataIfNeeded()
+        // App now collects and stores real user data
+    }
+    
+    private func clearMockDataOnce() {
+        let mockDataClearedKey = "mockDataCleared"
+        
+        // Only clear mock data if we haven't done it before
+        if !UserDefaults.standard.bool(forKey: mockDataClearedKey) {
+            // Clear all UserDefaults data to remove any existing mock data
+            UserDefaults.standard.removeObject(forKey: episodesKey)
+            UserDefaults.standard.removeObject(forKey: recordingsKey)
+            UserDefaults.standard.removeObject(forKey: postsKey)
+            UserDefaults.standard.removeObject(forKey: preferencesKey)
+            UserDefaults.standard.removeObject(forKey: setupKey)
+            
+            // Mark that we've cleared mock data
+            UserDefaults.standard.set(true, forKey: mockDataClearedKey)
+            
+            print("🧹 Cleared mock data once - app now ready to collect real user data")
+        }
     }
     
     // MARK: - Data Persistence
@@ -157,77 +179,7 @@ class DataManager: ObservableObject {
         return symptomCounts
     }
     
-    // MARK: - Sample Data
-    private func loadSampleDataIfNeeded() {
-        if episodes.isEmpty && isSetupComplete {
-            loadSampleEpisodes()
-        }
-        
-        if communityPosts.isEmpty {
-            loadSampleCommunityPosts()
-        }
-    }
-    
-    private func loadSampleEpisodes() {
-        let calendar = Calendar.current
-        let now = Date()
-        
-        let sampleEpisodes = [
-            SleepEpisode(
-                date: calendar.date(byAdding: .day, value: -1, to: now) ?? now,
-                severity: .moderate,
-                symptoms: [.snoring, .gasping],
-                notes: "Woke up feeling tired, partner noticed snoring"
-            ),
-            SleepEpisode(
-                date: calendar.date(byAdding: .day, value: -3, to: now) ?? now,
-                severity: .severe,
-                symptoms: [.gasping, .chestPain, .morningHeadache],
-                notes: "Very difficult night, felt like I couldn't breathe"
-            ),
-            SleepEpisode(
-                date: calendar.date(byAdding: .day, value: -5, to: now) ?? now,
-                severity: .mild,
-                symptoms: [.restless],
-                notes: "Slept okay but felt restless"
-            )
-        ]
-        
-        episodes = sampleEpisodes
-        saveData()
-    }
-    
-    private func loadSampleCommunityPosts() {
-        let samplePosts = [
-            CommunityPost(
-                author: "SleepWell",
-                content: "Has anyone tried the new CPAP mask? I'm having trouble adjusting to it.",
-                likes: 12,
-                comments: [
-                    Comment(author: "Dreamer", content: "It took me about 2 weeks to get used to it. Hang in there!"),
-                    Comment(author: "Restful", content: "Try adjusting the straps, that helped me a lot.")
-                ]
-            ),
-            CommunityPost(
-                author: "NightOwl",
-                content: "Just had my sleep study results back. Moderate sleep apnea. Starting treatment next week!",
-                likes: 8,
-                comments: [
-                    Comment(author: "SleepWell", content: "Good luck! Treatment made a huge difference for me.")
-                ]
-            ),
-            CommunityPost(
-                author: "Restful",
-                content: "What's everyone's favorite sleep tracking app? Looking for recommendations.",
-                likes: 15,
-                comments: [
-                    Comment(author: "Dreamer", content: "I love Sleep Cycle, it's really accurate!"),
-                    Comment(author: "NightOwl", content: "AutoSleep with Apple Watch is great too.")
-                ]
-            )
-        ]
-        
-        communityPosts = samplePosts
-        saveData()
-    }
+    // MARK: - Sample Data (Removed)
+    // All sample data loading has been removed to ensure analytics use real recording data only
+    // Users will see empty states until they create real recordings and episodes
 } 

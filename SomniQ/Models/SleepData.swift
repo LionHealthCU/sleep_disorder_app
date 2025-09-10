@@ -97,11 +97,47 @@ struct AudioRecording: Identifiable, Codable {
     var fileURL: URL
     var episodeId: UUID?
     
-    init(date: Date = Date(), duration: TimeInterval, fileURL: URL, episodeId: UUID? = nil) {
+    // Enhanced with analysis data
+    var detectedSounds: [DetectedSound]
+    var mostCommonSound: String?
+    var totalDetections: Int
+    var uniqueSoundCount: Int
+    
+    init(date: Date = Date(), duration: TimeInterval, fileURL: URL, episodeId: UUID? = nil, detectedSounds: [DetectedSound] = [], mostCommonSound: String? = nil, totalDetections: Int = 0, uniqueSoundCount: Int = 0) {
         self.date = date
         self.duration = duration
         self.fileURL = fileURL
         self.episodeId = episodeId
+        self.detectedSounds = detectedSounds
+        self.mostCommonSound = mostCommonSound
+        self.totalDetections = totalDetections
+        self.uniqueSoundCount = uniqueSoundCount
+    }
+    
+    // Convenience initializer from RecordingSummary
+    init(from summary: RecordingSummary, episodeId: UUID? = nil) {
+        self.date = summary.recordingDate
+        self.duration = summary.duration
+        self.fileURL = summary.fileURL
+        self.episodeId = episodeId
+        self.detectedSounds = summary.detectedSounds
+        self.mostCommonSound = summary.mostCommonSound
+        self.totalDetections = summary.totalDetections
+        self.uniqueSoundCount = Set(summary.detectedSounds.map { $0.soundName }).count
+    }
+}
+
+// MARK: - Detected Sound Model
+struct DetectedSound: Identifiable, Codable {
+    let id = UUID()
+    let soundName: String
+    let confidence: Float
+    let timestamp: Date
+    
+    init(soundName: String, confidence: Float, timestamp: Date) {
+        self.soundName = soundName
+        self.confidence = confidence
+        self.timestamp = timestamp
     }
 }
 

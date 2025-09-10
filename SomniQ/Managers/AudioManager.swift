@@ -5,19 +5,6 @@ import SoundAnalysis
 import Combine
 
 // MARK: - Sleep Sound Detection Models
-struct DetectedSound: Identifiable, Codable {
-    let id = UUID()
-    let soundName: String
-    let confidence: Double
-    let timestamp: Date
-    
-    init(soundName: String, confidence: Double, timestamp: Date = Date()) {
-        self.soundName = soundName
-        self.confidence = confidence
-        self.timestamp = timestamp
-    }
-}
-
 struct RecordingSummary: Codable {
     let recordingDate: Date
     let duration: TimeInterval
@@ -141,7 +128,7 @@ extension SoundAnalysisManager: SNResultsObserving {
             
             let detectedSound = DetectedSound(
                 soundName: classification.identifier,
-                confidence: Double(classification.confidence),
+                confidence: Float(classification.confidence),
                 timestamp: Date().addingTimeInterval(timestamp)
             )
             

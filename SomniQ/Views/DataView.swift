@@ -26,6 +26,7 @@ struct DataView: View {
         case episodes = "Episodes"
         case severity = "Severity"
         case symptoms = "Symptoms"
+        case recordings = "Recordings"
     }
     
     var body: some View {
@@ -46,6 +47,9 @@ struct DataView: View {
                     
                     // Episode list
                     episodeListSection
+                    
+                    // Recordings list
+                    recordingsListSection
                 }
                 .padding()
             }
@@ -95,6 +99,8 @@ struct DataView: View {
                     severityChart
                 case .symptoms:
                     symptomsChart
+                case .recordings:
+                    recordingsChart
                 }
             }
             .frame(height: 300)
@@ -164,12 +170,38 @@ struct DataView: View {
         }
     }
     
+    private var recordingsChart: some View {
+        Chart {
+            ForEach(filteredRecordings, id: \.id) { recording in
+                BarMark(
+                    x: .value("Date", recording.date, unit: .day),
+                    y: .value("Duration", recording.duration / 3600) // Convert to hours
+                )
+                .foregroundStyle(.green)
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .day)) { value in
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.day().month())
+            }
+        }
+        .chartYAxis {
+            AxisMarks { value in
+                AxisGridLine()
+                AxisValueLabel() // TODO: Add decimal precision formatting later - currently showing whole numbers to avoid ambiguity
+            }
+        }
+        .chartYAxisLabel("Duration (hours)")
+    }
+    
     private var statisticsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Statistics")
                 .font(.headline)
             
             LazyVGrid(columns: [
+                GridItem(.flexible()),
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 16) {
@@ -199,6 +231,27 @@ struct DataView: View {
                     value: "\(audioRecordingsInRange.count)",
                     icon: "mic.fill",
                     color: .green
+                )
+                
+                StatisticCard(
+                    title: "Total Sounds",
+                    value: "\(audioRecordingsInRange.reduce(0) { $0 + $1.totalDetections })",
+                    icon: "waveform",
+                    color: .purple
+                )
+                
+                StatisticCard(
+                    title: "Avg Duration",
+                    value: averageRecordingDuration,
+                    icon: "clock",
+                    color: .blue
+                )
+                
+                StatisticCard(
+                    title: "Most Detected",
+                    value: mostCommonDetectedSound ?? "None",
+                    icon: "chart.bar.fill",
+                    color: .orange
                 )
             }
         }
@@ -233,6 +286,35 @@ struct DataView: View {
         }
     }
     
+    private var recordingsListSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Recent Recordings")
+                .font(.headline)
+            
+            if filteredRecordings.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "mic.fill")
+                        .font(.title)
+                        .foregroundColor(.secondary)
+                    
+                    Text("No recordings in this time range")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(filteredRecordings.prefix(10)) { recording in
+                        RecordingDetailRow(recording: recording)
+                    }
+                }
+            }
+        }
+    }
+    
     // MARK: - Computed Properties
     
     private var chartTitle: String {
@@ -243,6 +325,8 @@ struct DataView: View {
             return "Severity Distribution"
         case .symptoms:
             return "Most Common Symptoms"
+        case .recordings:
+            return "Recording Duration Over Time"
         }
     }
     
@@ -304,6 +388,39 @@ struct DataView: View {
         let calendar = Calendar.current
         let startDate = calendar.date(byAdding: .day, value: -selectedTimeRange.days, to: Date()) ?? Date()
         return dataManager.audioRecordings.filter { $0.date >= startDate }
+    }
+    
+    private var filteredRecordings: [AudioRecording] {
+        let calendar = Calendar.current
+        let startDate = calendar.date(byAdding: .day, value: -selectedTimeRange.days, to: Date()) ?? Date()
+        return dataManager.audioRecordings.filter { $0.date >= startDate }
+    }
+    
+    private var averageRecordingDuration: String {
+        guard !filteredRecordings.isEmpty else { return "None" }
+        
+        let totalDuration = filteredRecordings.reduce(0) { $0 + $1.duration }
+        let averageHours = totalDuration / Double(filteredRecordings.count) / 3600
+        
+        if averageHours >= 1 {
+            return String(format: "%.1fh", averageHours)
+        } else {
+            let averageMinutes = averageHours * 60
+            return String(format: "%.0fm", averageMinutes)
+        }
+    }
+    
+    private var mostCommonDetectedSound: String? {
+        guard !filteredRecordings.isEmpty else { return nil }
+        
+        var soundCounts: [String: Int] = [:]
+        for recording in filteredRecordings {
+            for sound in recording.detectedSounds {
+                soundCounts[sound.soundName, default: 0] += 1
+            }
+        }
+        
+        return soundCounts.max(by: { $0.value < $1.value })?.key
     }
 }
 
@@ -383,6 +500,73 @@ struct EpisodeDetailRow: View {
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(8)
+    }
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }
+}
+
+struct RecordingDetailRow: View {
+    let recording: AudioRecording
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "mic.fill")
+                    .foregroundColor(.green)
+                
+                Text(formatDuration(recording.duration))
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Spacer()
+                
+                Text(recording.date, formatter: dateFormatter)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            if recording.totalDetections > 0 {
+                HStack {
+                    Text("\(recording.totalDetections) sounds detected")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    if let mostCommon = recording.mostCommonSound {
+                        Text("Most: \(mostCommon.capitalized)")
+                            .font(.caption)
+                            .foregroundColor(.primary)
+                    }
+                }
+                
+                if !recording.detectedSounds.isEmpty {
+                    Text("Sounds: \(recording.detectedSounds.prefix(5).map { $0.soundName.capitalized }.joined(separator: ", "))")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(8)
+    }
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let hours = Int(duration) / 3600
+        let minutes = Int(duration) / 60 % 60
+        
+        if hours > 0 {
+            return String(format: "%dh %dm", hours, minutes)
+        } else {
+            return String(format: "%dm", minutes)
+        }
     }
     
     private var dateFormatter: DateFormatter {
