@@ -3,6 +3,8 @@ import AVFoundation
 import SwiftUI
 import SoundAnalysis
 import Combine
+import FirebaseStorage
+import FirebaseAuth
 
 // MARK: - Sleep Sound Detection Models
 struct RecordingSummary: Codable {
@@ -39,27 +41,27 @@ class SoundAnalysisManager: NSObject, ObservableObject {
     private func setupSoundClassifier() {
         do {
             // Use Apple's built-in sound classifier
-            print("🔧 Setting up sound classifier...")
+            print("Setting up sound classifier...")
             classifySoundRequest = try SNClassifySoundRequest(classifierIdentifier: .version1)
             
             // Configure the request
             classifySoundRequest?.windowDuration = CMTime(seconds: 1.0, preferredTimescale: 1000)
             classifySoundRequest?.overlapFactor = 0.5
             
-            print("✅ Sound classifier setup successful")
+            print("Sound classifier setup successful")
             print("📋 Available sound classifications: \(classifySoundRequest?.knownClassifications ?? [])")
             print("📋 Window duration: \(classifySoundRequest?.windowDuration ?? CMTime.zero)")
             print("📋 Overlap factor: \(classifySoundRequest?.overlapFactor ?? 0)")
             print("📋 Classifier identifier: \(SNClassifierIdentifier.version1)")
         } catch {
-            print("❌ Failed to setup sound classifier: \(error)")
-            print("❌ Error details: \(error.localizedDescription)")
+            print("Failed to setup sound classifier: \(error)")
+            print("Error details: \(error.localizedDescription)")
         }
     }
     
     func startAnalysis(with audioEngine: AVAudioEngine) {
         guard let request = classifySoundRequest else {
-            print("❌ Sound classifier not available")
+            print("Sound classifier not available")
             return
         }
         
@@ -76,13 +78,13 @@ class SoundAnalysisManager: NSObject, ObservableObject {
             allDetections.removeAll()
             currentDetections.removeAll()
             
-            print("✅ Sound analysis started successfully")
+            print("Sound analysis started successfully")
             print("📋 Available classifications: \(request.knownClassifications)")
             print("📋 Request type: \(type(of: request))")
             print("📋 Observer set: \(self)")
         } catch {
-            print("❌ Failed to start sound analysis: \(error)")
-            print("❌ Error details: \(error.localizedDescription)")
+            print("Failed to start sound analysis: \(error)")
+            print("Error details: \(error.localizedDescription)")
         }
     }
     
@@ -108,7 +110,7 @@ extension SoundAnalysisManager: SNResultsObserving {
         print("🔍 Observer called with result type: \(type(of: result))")
         
         guard let classificationResult = result as? SNClassificationResult else { 
-            print("❌ Received non-classification result: \(type(of: result))")
+            print("Received non-classification result: \(type(of: result))")
             return 
         }
         
@@ -147,12 +149,12 @@ extension SoundAnalysisManager: SNResultsObserving {
     }
     
     func request(_ request: SNRequest, didFailWithError error: Error) {
-        print("❌ Sound analysis failed: \(error)")
+        print("Sound analysis failed: \(error)")
         print("❌ Error details: \(error.localizedDescription)")
     }
     
     func requestDidComplete(_ request: SNRequest) {
-        print("✅ Sound analysis completed")
+        print("Sound analysis completed")
     }
 }
 
@@ -163,6 +165,9 @@ class AudioManager: NSObject, ObservableObject {
     @Published var hasPermission = false
     @Published var detectedSounds: [DetectedSound] = []
     @Published var recordingSummary: RecordingSummary?
+    @Published var uploadProgress: Double = 0.0
+    @Published var isUploading = false
+    @Published var uploadError: String?
     
     private var audioEngine: AVAudioEngine?
     private var audioFile: AVAudioFile?
@@ -170,6 +175,7 @@ class AudioManager: NSObject, ObservableObject {
     private var recordingStartTime: Date?
     private var outputFileURL: URL?
     private let soundAnalysisManager = SoundAnalysisManager()
+    private let storage = Storage.storage()
     
     override init() {
         super.init()
@@ -270,7 +276,7 @@ class AudioManager: NSObject, ObservableObject {
                         }
                     }
                 } catch {
-                    print("❌ Failed to write buffer: \(error)")
+                    print("Failed to write buffer: \(error)")
                 }
             }
             
@@ -345,6 +351,122 @@ class AudioManager: NSObject, ObservableObject {
             player.play()
         } catch {
             print("Failed to play recording: \(error)")
+        }
+    }
+    
+    // MARK: - Firebase Storage Upload
+    func uploadAudioToFirebase(localFileURL: URL, completion: @escaping (Result<String, Error>) -> Void) {
+        guard let user = Auth.auth().currentUser else {
+            completion(.failure(NSError(domain: "AudioManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])))
+            return
+        }
+        
+        isUploading = true
+        uploadProgress = 0.0
+        uploadError = nil
+        
+        // Create a unique filename with timestamp and user ID
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let fileName = "sleep_recording_\(user.uid)_\(timestamp).caf"
+        let storageRef = storage.reference().child("audio_recordings/\(user.uid)/\(fileName)")
+        
+        // Create metadata for the file
+        let metadata = StorageMetadata()
+        metadata.contentType = "audio/x-caf"
+        metadata.customMetadata = [
+            "recordingDate": ISO8601DateFormatter().string(from: Date()),
+            "userId": user.uid,
+            "duration": String(recordingDuration)
+        ]
+        
+        // Upload the file
+        let uploadTask = storageRef.putFile(from: localFileURL, metadata: metadata) { [weak self] metadata, error in
+            DispatchQueue.main.async {
+                self?.isUploading = false
+                
+                if let error = error {
+                    self?.uploadError = error.localizedDescription
+                    completion(.failure(error))
+                    return
+                }
+                
+                // Get the download URL
+                storageRef.downloadURL { url, error in
+                    DispatchQueue.main.async {
+                        if let error = error {
+                            self?.uploadError = error.localizedDescription
+                            completion(.failure(error))
+                        } else if let downloadURL = url {
+                            print("Audio file uploaded successfully to Firebase Storage")
+                            print("Download URL: \(downloadURL.absoluteString)")
+                            completion(.success(downloadURL.absoluteString))
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Monitor upload progress
+        uploadTask.observe(.progress) { [weak self] snapshot in
+            DispatchQueue.main.async {
+                if let progress = snapshot.progress {
+                    self?.uploadProgress = Double(progress.completedUnitCount) / Double(progress.totalUnitCount)
+                    print("Upload progress: \(Int(self?.uploadProgress ?? 0 * 100))%")
+                }
+            }
+        }
+        
+        // Handle upload state changes
+        uploadTask.observe(.success) { [weak self] snapshot in
+            DispatchQueue.main.async {
+                print("Upload completed successfully")
+            }
+        }
+        
+        uploadTask.observe(.failure) { [weak self] snapshot in
+            DispatchQueue.main.async {
+                if let error = snapshot.error {
+                    self?.uploadError = error.localizedDescription
+                    print("Upload failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    // MARK: - Combined Recording and Upload
+    func stopRecordingAndUpload(completion: @escaping (Result<String, Error>) -> Void) {
+        guard let localFileURL = stopRecording() else {
+            completion(.failure(NSError(domain: "AudioManager", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to stop recording"])))
+            return
+        }
+        
+        // Upload to Firebase Storage while keeping local file
+        uploadAudioToFirebase(localFileURL: localFileURL) { result in
+            switch result {
+            case .success(let downloadURL):
+                print("Recording saved locally and uploaded to Firebase Storage")
+                print("Local file: \(localFileURL.path)")
+                print("Firebase URL: \(downloadURL)")
+                
+                // Update the recording summary with Firebase URL
+                if var summary = self.recordingSummary {
+                    // Create a new summary with Firebase URL instead of local URL
+                    let firebaseURL = URL(string: downloadURL)!
+                    summary = RecordingSummary(
+                        recordingDate: summary.recordingDate,
+                        duration: summary.duration,
+                        detectedSounds: summary.detectedSounds,
+                        fileURL: firebaseURL
+                    )
+                    self.recordingSummary = summary
+                }
+                
+                completion(.success(downloadURL))
+            case .failure(let error):
+                print("Failed to upload to Firebase Storage: \(error.localizedDescription)")
+                print("Local file still available at: \(localFileURL.path)")
+                completion(.failure(error))
+            }
         }
     }
     

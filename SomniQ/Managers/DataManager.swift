@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AVFoundation
+import Combine
 
 class DataManager: ObservableObject {
     @Published var episodes: [SleepEpisode] = []
@@ -8,8 +9,13 @@ class DataManager: ObservableObject {
     @Published var userPreferences: UserPreferences?
     @Published var communityPosts: [CommunityPost] = []
     @Published var isSetupComplete: Bool = false
+    @Published var isSyncing: Bool = false
+    @Published var lastSyncDate: Date?
+    @Published var syncError: String?
     
     private var currentUserId: String?
+    private let firestoreService = FirestoreService.shared
+    private var cancellables = Set<AnyCancellable>()
     private let episodesKey = "sleepEpisodes"
     private let recordingsKey = "audioRecordings"
     private let preferencesKey = "userPreferences"
@@ -37,6 +43,27 @@ class DataManager: ObservableObject {
             name: .userDidSignOut,
             object: nil
         )
+        
+        // Listen for Firestore sync status changes
+        firestoreService.$syncStatus
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                switch status {
+                case .syncing:
+                    self?.isSyncing = true
+                    self?.syncError = nil
+                case .success:
+                    self?.isSyncing = false
+                    self?.lastSyncDate = Date()
+                    self?.syncError = nil
+                case .error(let error):
+                    self?.isSyncing = false
+                    self?.syncError = error
+                case .idle:
+                    self?.isSyncing = false
+                }
+            }
+            .store(in: &cancellables)
     }
     
     deinit {
@@ -62,6 +89,11 @@ class DataManager: ObservableObject {
     func setCurrentUser(_ userId: String) {
         self.currentUserId = userId
         loadData()
+        
+        // Perform initial sync from Firestore when user signs in
+        Task {
+            await syncFromFirestore()
+        }
     }
     
     private func userSpecificKey(_ baseKey: String) -> String {
@@ -84,7 +116,7 @@ class DataManager: ObservableObject {
             // Mark that we've cleared mock data
             UserDefaults.standard.set(true, forKey: mockDataClearedKey)
             
-            print("🧹 Cleared mock data once - app now ready to collect real user data")
+            print("Cleared mock data once - app now ready to collect real user data")
         }
     }
     
@@ -138,24 +170,44 @@ class DataManager: ObservableObject {
     func addEpisode(_ episode: SleepEpisode) {
         episodes.append(episode)
         saveData()
+        
+        // Sync to Firestore
+        Task {
+            await firestoreService.saveEpisode(episode)
+        }
     }
     
     func updateEpisode(_ episode: SleepEpisode) {
         if let index = episodes.firstIndex(where: { $0.id == episode.id }) {
             episodes[index] = episode
             saveData()
+            
+            // Sync to Firestore
+            Task {
+                await firestoreService.saveEpisode(episode)
+            }
         }
     }
     
     func deleteEpisode(_ episode: SleepEpisode) {
         episodes.removeAll { $0.id == episode.id }
         saveData()
+        
+        // Sync to Firestore
+        Task {
+            await firestoreService.deleteEpisode(episode)
+        }
     }
     
     // MARK: - Audio Recording Management
     func addAudioRecording(_ recording: AudioRecording) {
         audioRecordings.append(recording)
         saveData()
+        
+        // Sync to Firestore
+        Task {
+            await firestoreService.saveRecording(recording)
+        }
     }
     
     func deleteAudioRecording(_ recording: AudioRecording) {
@@ -163,6 +215,11 @@ class DataManager: ObservableObject {
         // Delete the actual file
         try? FileManager.default.removeItem(at: recording.fileURL)
         saveData()
+        
+        // Sync to Firestore
+        Task {
+            await firestoreService.deleteRecording(recording)
+        }
     }
     
     // MARK: - User Preferences
@@ -170,6 +227,11 @@ class DataManager: ObservableObject {
         userPreferences = preferences
         isSetupComplete = true
         saveData()
+        
+        // Sync to Firestore
+        Task {
+            await firestoreService.savePreferences(preferences)
+        }
     }
     
     // MARK: - Reset Setup (for testing)
@@ -184,12 +246,22 @@ class DataManager: ObservableObject {
     func addCommunityPost(_ post: CommunityPost) {
         communityPosts.insert(post, at: 0)
         saveData()
+        
+        // Sync to Firestore
+        Task {
+            await firestoreService.saveCommunityPost(post)
+        }
     }
     
     func likePost(_ post: CommunityPost) {
         if let index = communityPosts.firstIndex(where: { $0.id == post.id }) {
             communityPosts[index].likes += 1
             saveData()
+            
+            // Sync to Firestore
+            Task {
+                await firestoreService.updatePostLikes(communityPosts[index])
+            }
         }
     }
     
@@ -197,6 +269,11 @@ class DataManager: ObservableObject {
         if let index = communityPosts.firstIndex(where: { $0.id == post.id }) {
             communityPosts[index].comments.append(comment)
             saveData()
+            
+            // Sync to Firestore
+            Task {
+                await firestoreService.addCommentToPost(communityPosts[index], comment: comment)
+            }
         }
     }
     
@@ -223,6 +300,71 @@ class DataManager: ObservableObject {
             }
         }
         return symptomCounts
+    }
+    
+    // MARK: - Firestore Sync Methods
+    func syncFromFirestore() async {
+        guard currentUserId != nil else { return }
+        
+        print("Starting sync from Firestore...")
+        
+        // Load data from Firestore
+        let firestoreEpisodes = await firestoreService.loadEpisodes()
+        let firestoreRecordings = await firestoreService.loadRecordings()
+        let firestorePreferences = await firestoreService.loadPreferences()
+        let firestorePosts = await firestoreService.loadCommunityPosts()
+        
+        // Update local data
+        DispatchQueue.main.async {
+            self.episodes = firestoreEpisodes
+            self.audioRecordings = firestoreRecordings
+            self.userPreferences = firestorePreferences
+            self.communityPosts = firestorePosts
+            
+            // Save to local storage
+            self.saveData()
+            
+            print("Sync from Firestore completed")
+        }
+    }
+    
+    func syncToFirestore() async {
+        guard currentUserId != nil else { return }
+        
+        print("Starting sync to Firestore...")
+        
+        // Sync all local data to Firestore
+        for episode in episodes {
+            await firestoreService.saveEpisode(episode)
+        }
+        
+        for recording in audioRecordings {
+            await firestoreService.saveRecording(recording)
+        }
+        
+        if let preferences = userPreferences {
+            await firestoreService.savePreferences(preferences)
+        }
+        
+        for post in communityPosts {
+            await firestoreService.saveCommunityPost(post)
+        }
+        
+        print("Sync to Firestore completed")
+    }
+    
+    func performFullSync() async {
+        guard currentUserId != nil else { return }
+        
+        print("Starting full bidirectional sync...")
+        
+        // First, sync from Firestore to get latest data
+        await syncFromFirestore()
+        
+        // Then, sync local changes back to Firestore
+        await syncToFirestore()
+        
+        print("Full sync completed")
     }
     
     // MARK: - Sample Data (Removed)

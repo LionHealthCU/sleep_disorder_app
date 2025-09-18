@@ -94,7 +94,38 @@ SomniQ/
 - **Local Storage**: All data stored locally on device
 - **Encrypted Data**: Health data encrypted at rest
 - **Permission-Based**: Explicit user consent for all features
-- **No Cloud Sync**: Privacy-focused local-first approach
+- **Dual Storage**: Local-first with optional cloud backup
+- **Firebase Integration**: Secure cloud storage for cross-device sync
+
+## Firebase Data Storage
+
+SomniQ stores data in Firebase using two services:
+
+### Firebase Storage
+Audio recordings (.caf files) are stored in Firebase Storage with the following structure:
+```
+audio_recordings/{userId}/sleep_recording_{userId}_{timestamp}.caf
+```
+
+### Firebase Firestore
+All other app data is stored in Firestore collections:
+
+```
+users/{userId}/
+├── episodes/           # Sleep episodes with symptoms and severity
+├── recordings/         # Audio recording metadata and summaries
+└── preferences/        # User settings and configuration
+
+community_posts/        # Community support posts and comments
+```
+
+### Data Types Stored
+- **Sleep Episodes**: Date, time, severity level, symptoms, notes
+- **Audio Recordings**: Recording metadata, duration, detected sounds, file URLs
+- **User Preferences**: App settings, sleep schedule, notification preferences
+- **Community Posts**: Support posts, comments, likes, user interactions
+
+All data is stored both locally (for offline access) and in Firebase (for cross-device sync).
 
 ## Getting Started
 

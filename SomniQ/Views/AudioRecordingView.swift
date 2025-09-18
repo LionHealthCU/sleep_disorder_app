@@ -106,6 +106,50 @@ struct AudioRecordingView: View {
                     }
                 }
                 
+                // Upload progress indicator
+                if audioManager.isUploading {
+                    VStack(spacing: 12) {
+                        HStack {
+                            Image(systemName: "icloud.and.arrow.up")
+                                .foregroundColor(.blue)
+                            Text("Uploading to Firebase Storage...")
+                                .font(.subheadline)
+                                .foregroundColor(.primary)
+                        }
+                        
+                        ProgressView(value: audioManager.uploadProgress)
+                            .progressViewStyle(LinearProgressViewStyle())
+                        
+                        Text("\(Int(audioManager.uploadProgress * 100))%")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+                
+                // Upload error display
+                if let uploadError = audioManager.uploadError {
+                    VStack(spacing: 8) {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundColor(.red)
+                            Text("Upload Failed")
+                                .font(.subheadline)
+                                .foregroundColor(.red)
+                        }
+                        
+                        Text(uploadError)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+                
                 // Show summary button if recording is complete
                 if let summary = audioManager.recordingSummary {
                     Button("View Recording Summary") {
@@ -160,15 +204,27 @@ struct AudioRecordingView: View {
     }
     
     private func stopRecording() {
-        if let recordingURL = audioManager.stopRecording() {
-            recordingName = "Sleep Recording \(Date().formatted(date: .abbreviated, time: .shortened))"
-            showingSaveAlert = true
+        audioManager.stopRecordingAndUpload { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let firebaseURL):
+                    print("Recording saved locally and uploaded to Firebase Storage")
+                    print("Firebase URL: \(firebaseURL)")
+                    self.recordingName = "Sleep Recording \(Date().formatted(date: .abbreviated, time: .shortened))"
+                    self.showingSaveAlert = true
+                case .failure(let error):
+                    print("Failed to upload to Firebase Storage: \(error.localizedDescription)")
+                    // Still show save alert for local storage
+                    self.recordingName = "Sleep Recording \(Date().formatted(date: .abbreviated, time: .shortened))"
+                    self.showingSaveAlert = true
+                }
+            }
         }
     }
     
     private func saveRecording() {
         guard let recordingSummary = audioManager.recordingSummary else { 
-            print("❌ No recording summary found")
+            print("No recording summary found")
             return 
         }
         

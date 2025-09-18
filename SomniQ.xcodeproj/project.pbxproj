@@ -7,11 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		95687EE82E7206C300319928 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 95687EE72E7206C300319928 /* FirebaseAuth */; };
+		95687EEC2E7206C300319928 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 95687EEB2E7206C300319928 /* FirebaseCore */; };
+		95687EEE2E7206C300319928 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 95687EED2E7206C300319928 /* FirebaseStorage */; };
+		95687EF02E7206C300319928 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 95687EEF2E7206C300319928 /* FirebaseFirestore */; };
 		95F177D72E721B9A0087A6B7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 95F177D62E721B9A0087A6B7 /* GoogleService-Info.plist */; };
 		95F177D82E721B9A0087A6B7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 95F177D62E721B9A0087A6B7 /* GoogleService-Info.plist */; };
 		95F177D92E721B9A0087A6B7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 95F177D62E721B9A0087A6B7 /* GoogleService-Info.plist */; };
-		95687EEC2E7206C300319928 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 95687EEB2E7206C300319928 /* FirebaseCore */; };
-		95687EE82E7206C300319928 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 95687EE72E7206C300319928 /* FirebaseAuth */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +65,8 @@
 			files = (
 				95687EEC2E7206C300319928 /* FirebaseCore in Frameworks */,
 				95687EE82E7206C300319928 /* FirebaseAuth in Frameworks */,
+				95687EEE2E7206C300319928 /* FirebaseStorage in Frameworks */,
+				95687EF02E7206C300319928 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -126,6 +130,8 @@
 			packageProductDependencies = (
 				95687EEB2E7206C300319928 /* FirebaseCore */,
 				95687EE72E7206C300319928 /* FirebaseAuth */,
+				95687EED2E7206C300319928 /* FirebaseStorage */,
+				95687EEF2E7206C300319928 /* FirebaseFirestore */,
 			);
 			productName = SomniQ;
 			productReference = EFD916952E1387A9008BEAE8 /* SomniQ.app */;
@@ -595,15 +601,25 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		95687EE72E7206C300319928 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 95687EDA2E7206C300319928 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
 		95687EEB2E7206C300319928 /* FirebaseCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 95687EDA2E7206C300319928 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCore;
 		};
-		95687EE72E7206C300319928 /* FirebaseAuth */ = {
+		95687EED2E7206C300319928 /* FirebaseStorage */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 95687EDA2E7206C300319928 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAuth;
+			productName = FirebaseStorage;
+		};
+		95687EEF2E7206C300319928 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 95687EDA2E7206C300319928 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
