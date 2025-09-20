@@ -1,44 +1,61 @@
 import SwiftUI
 
-struct DashboardView: View {
+// MARK: - Dark Mode Color Extensions
+extension Color {
+    static let sleepPrimary = Color(red: 0.29, green: 0.29, blue: 0.54) // #4A4A8A
+    static let sleepSecondary = Color(red: 0.42, green: 0.45, blue: 1.0) // #6B73FF
+    static let sleepDark = Color(red: 0.10, green: 0.10, blue: 0.10) // #1A1A1A
+    static let sleepDarkGray = Color(red: 0.18, green: 0.18, blue: 0.18) // #2D3436
+    static let sleepAccent = Color(red: 0.45, green: 0.73, blue: 1.0) // #74B9FF
+    static let sleepPurple = Color(red: 0.64, green: 0.61, blue: 1.0) // #A29BFE
+}
+
+struct DashboardView: View { 
     @ObservedObject var dataManager: DataManager
     @EnvironmentObject var authManager: AuthManager
     @State private var showingRecordAudio = false
     @State private var showingSelfReport = false
     @State private var showingHealthKit = false
-    @State private var showingCommunity = false
     @State private var showSignOutAlert = false
     
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
+                    // Custom SomniQ Title with Gradient
+                    customTitleSection
+                    
                     // Header with user info
                     headerSection
                     
                     // Quick stats
                     quickStatsSection
                     
-                    // Main action buttons
-                    actionButtonsSection
+                    // Central recording section (primary focus)
+                    centralRecordingSection
                     
-                    // Recent episodes
-                    recentEpisodesSection
-                    
-                    // Recent recordings
-                    recentRecordingsSection
+                    // History access
+                    historyAccessSection
                 }
                 .padding()
             }
-            .navigationTitle("SomniQ")
-            .navigationBarTitleDisplayMode(.large)
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.sleepDark, Color.sleepDarkGray]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Reset Setup") {
                         dataManager.resetSetup()
                     }
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(Color.sleepAccent)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -47,10 +64,11 @@ struct DashboardView: View {
                             showSignOutAlert = true
                         }
                         .font(.caption)
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color.sleepSecondary)
                         
                         NavigationLink(destination: DataView(dataManager: dataManager)) {
                             Image(systemName: "chart.line.uptrend.xyaxis")
+                                .foregroundColor(Color.sleepAccent)
                         }
                     }
                 }
@@ -73,9 +91,47 @@ struct DashboardView: View {
         .sheet(isPresented: $showingHealthKit) {
             HealthKitView(dataManager: dataManager)
         }
-        .sheet(isPresented: $showingCommunity) {
-            CommunityView(dataManager: dataManager)
+    }
+    
+    private var customTitleSection: some View {
+        VStack(spacing: 8) {
+            HStack {
+                // Moon icon with gradient
+                Image(systemName: "moon.zzz.fill")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.sleepSecondary, Color.sleepPurple]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .shadow(color: Color.sleepSecondary.opacity(0.4), radius: 8, x: 0, y: 4)
+                
+                // SomniQ text with gradient
+                Text("SomniQ")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.sleepSecondary, Color.sleepPurple]),
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .shadow(color: Color.sleepSecondary.opacity(0.3), radius: 6, x: 0, y: 3)
+                
+                Spacer()
+            }
+            
+            // Subtitle
+            Text("Sleep Sound Analytics")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white.opacity(0.8))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 40) // Align with the text above
         }
+        .padding(.horizontal)
+        .padding(.top, 8)
     }
     
     private var headerSection: some View {
@@ -85,11 +141,12 @@ struct DashboardView: View {
                     Text("Good \(timeOfDay)")
                         .font(.title2)
                         .fontWeight(.semibold)
+                        .foregroundColor(.white)
                     
                     if let preferences = dataManager.userPreferences {
                         Text("Your usual sleep time: \(preferences.usualBedtime, formatter: timeFormatter) - \(preferences.usualWakeTime, formatter: timeFormatter)")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.white.opacity(0.8))
                     }
                 }
                 
@@ -97,12 +154,22 @@ struct DashboardView: View {
                 
                 Image(systemName: "moon.zzz.fill")
                     .font(.title)
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color.sleepAccent)
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [Color.sleepDarkGray, Color.sleepPrimary.opacity(0.3)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.sleepAccent.opacity(0.2), lineWidth: 1)
+        )
     }
     
     private var quickStatsSection: some View {
@@ -111,7 +178,7 @@ struct DashboardView: View {
                 title: "Episodes",
                 value: "\(dataManager.episodes.count)",
                 icon: "note.text",
-                color: .blue
+                color: Color.sleepAccent
             )
             
             StatCard(
@@ -119,106 +186,222 @@ struct DashboardView: View {
                 value: "\(dataManager.audioRecordings.count)",
                 subtitle: dataManager.audioRecordings.isEmpty ? "No recordings yet" : "\(dataManager.audioRecordings.filter { $0.totalDetections > 0 }.count) with sounds",
                 icon: "mic.fill",
-                color: .green
+                color: Color.sleepPurple
             )
             
             StatCard(
                 title: "This Week",
                 value: "\(recentEpisodesCount)",
                 icon: "calendar",
-                color: .orange
+                color: Color.sleepSecondary
             )
         }
     }
     
-    private var actionButtonsSection: some View {
+    private var centralRecordingSection: some View {
+        VStack(spacing: 24) {
+            // Primary Recording Button - Large and Prominent
         VStack(spacing: 16) {
-            Text("Quick Actions")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Button(action: { showingRecordAudio = true }) {
+                    VStack(spacing: 12) {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.white)
+                        
+                        Text("Start Recording")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        Text("Capture sleep sounds")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 30)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.sleepSecondary, Color.sleepPurple]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .cornerRadius(20)
+                    .shadow(color: Color.sleepSecondary.opacity(0.4), radius: 15, x: 0, y: 8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.sleepAccent.opacity(0.3), lineWidth: 2)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // Quick Recording Stats
+                HStack(spacing: 20) {
+                    if let lastRecording = dataManager.audioRecordings.last {
+                        VStack(spacing: 4) {
+                            Text("Last Recording")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.8))
+                            Text(lastRecording.date, formatter: relativeDateFormatter)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    
+                    Divider()
+                        .frame(height: 30)
+                        .background(.white.opacity(0.3))
+                    
+                    VStack(spacing: 4) {
+                            Text("Sounds Today")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.8))
+                            Text("\(soundsDetectedToday)")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
+                    }
+                }
+                .padding(.horizontal)
+            }
             
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 16) {
-                ActionButton(
-                    title: "Record Audio",
-                    subtitle: "Capture sleep sounds",
-                    icon: "mic.fill",
-                    color: .red
-                ) {
-                    showingRecordAudio = true
-                }
+            // Secondary Actions - Smaller and Less Prominent
+            VStack(spacing: 12) {
+                Text("Other Actions")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.9))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 
-                ActionButton(
-                    title: "Self Report",
-                    subtitle: "Log an episode",
-                    icon: "note.text",
-                    color: .blue
-                ) {
-                    showingSelfReport = true
-                }
-                
-                ActionButton(
-                    title: "Apple Health",
-                    subtitle: "Connect & sync",
-                    icon: "heart.fill",
-                    color: .green
-                ) {
-                    showingHealthKit = true
-                }
-                
-                ActionButton(
-                    title: "Community",
-                    subtitle: "Connect with others",
-                    icon: "person.3.fill",
-                    color: .purple
-                ) {
-                    showingCommunity = true
+                HStack(spacing: 16) {
+                    // Self Report - Secondary
+                    Button(action: { showingSelfReport = true }) {
+                        VStack(spacing: 8) {
+                            Image(systemName: "note.text")
+                                .font(.title3)
+                                .foregroundColor(Color.sleepAccent)
+                            
+                            Text("Self Report")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.sleepDarkGray, Color.sleepPrimary.opacity(0.2)]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.sleepAccent.opacity(0.2), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Apple Health - Tertiary
+                    Button(action: { showingHealthKit = true }) {
+                        VStack(spacing: 8) {
+                            Image(systemName: "heart.fill")
+                                .font(.title3)
+                                .foregroundColor(Color.sleepPurple)
+                            
+                            Text("Health Sync")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.sleepDarkGray, Color.sleepPrimary.opacity(0.2)]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.sleepPurple.opacity(0.2), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
         }
     }
     
-    private var recentEpisodesSection: some View {
+    private var historyAccessSection: some View {
         VStack(spacing: 16) {
-            HStack {
-                Text("Recent Episodes")
+            Text("View History")
                     .font(.headline)
-                
-                Spacer()
-                
-                NavigationLink("View All", destination: DataView(dataManager: dataManager))
-                    .font(.caption)
-                    .foregroundColor(.blue)
-            }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
             
-            if dataManager.episodes.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "note.text")
-                        .font(.title)
-                        .foregroundColor(.secondary)
+            NavigationLink(destination: DataView(dataManager: dataManager)) {
+                HStack {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.title2)
+                        .foregroundColor(Color.sleepSecondary)
                     
-                    Text("No episodes recorded yet")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Data & Analytics")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                        
+                        Text("View detailed charts and history")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
                     
-                    Text("Tap 'Self Report' to log your first episode")
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
+                        .foregroundColor(Color.sleepAccent)
                 }
                 .padding()
-                .background(Color(.systemGray6))
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.sleepDarkGray, Color.sleepPrimary.opacity(0.2)]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .cornerRadius(12)
-            } else {
-                LazyVStack(spacing: 8) {
-                    ForEach(Array(dataManager.episodes.prefix(3))) { episode in
-                        EpisodeRow(episode: episode)
-                    }
-                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.sleepSecondary.opacity(0.2), lineWidth: 1)
+                )
             }
+            .buttonStyle(PlainButtonStyle())
         }
+    }
+    
+    
+    private var soundsDetectedToday: Int {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? Date()
+        
+        return dataManager.audioRecordings
+            .filter { recording in
+                recording.date >= today && recording.date < tomorrow
+            }
+            .reduce(0) { $0 + $1.totalDetections }
+    }
+    
+    private var relativeDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
     }
     
     private var timeOfDay: String {
@@ -241,46 +424,6 @@ struct DashboardView: View {
         return dataManager.episodes.filter { $0.date >= weekAgo }.count
     }
     
-    private var recentRecordingsSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Recent Recordings")
-                    .font(.headline)
-                
-                Spacer()
-                
-                NavigationLink("View All", destination: DataView(dataManager: dataManager))
-                    .font(.caption)
-                    .foregroundColor(.blue)
-            }
-            
-            if dataManager.audioRecordings.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "mic.fill")
-                        .font(.title)
-                        .foregroundColor(.secondary)
-                    
-                    Text("No recordings yet")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    Text("Tap 'Record Audio' to capture your first sleep sounds")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
-            } else {
-                LazyVStack(spacing: 8) {
-                    ForEach(Array(dataManager.audioRecordings.prefix(3))) { recording in
-                        RecordingRow(recording: recording)
-                    }
-                }
-            }
-        }
-    }
     
     private var timeFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -309,166 +452,42 @@ struct StatCard: View {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundColor(color)
+                .shadow(color: color.opacity(0.3), radius: 4, x: 0, y: 2)
             
             Text(value)
                 .font(.title2)
                 .fontWeight(.bold)
+                .foregroundColor(.white)
             
             Text(title)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.9))
             
             if let subtitle = subtitle {
                 Text(subtitle)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(Color(.systemGray6))
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [Color.sleepDarkGray, Color.sleepPrimary.opacity(0.1)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(color.opacity(0.2), lineWidth: 1)
+        )
     }
 }
 
-struct ActionButton: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.title)
-                    .foregroundColor(color)
-                
-                VStack(spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-struct EpisodeRow: View {
-    let episode: SleepEpisode
-    
-    var body: some View {
-        HStack {
-            Image(systemName: episode.severity.icon)
-                .foregroundColor(episode.severity.color)
-                .frame(width: 24)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(episode.severity.rawValue)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                Text(episode.date, formatter: dateFormatter)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-            
-            if !episode.symptoms.isEmpty {
-                Text("\(episode.symptoms.count) symptoms")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
-    }
-    
-    private var dateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
-    }
-}
-
-struct RecordingRow: View {
-    let recording: AudioRecording
-    
-    var body: some View {
-        HStack {
-            Image(systemName: "mic.fill")
-                .foregroundColor(.green)
-                .frame(width: 24)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(formatDuration(recording.duration))
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                Text(recording.date, formatter: dateFormatter)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                if recording.totalDetections > 0 {
-                    Text("\(recording.totalDetections) sounds detected")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            Spacer()
-            
-            if let mostCommon = recording.mostCommonSound {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(mostCommon.capitalized)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.primary)
-                    
-                    Text("\(recording.uniqueSoundCount) unique")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
-    }
-    
-    private func formatDuration(_ duration: TimeInterval) -> String {
-        let hours = Int(duration) / 3600
-        let minutes = Int(duration) / 60 % 60
-        
-        if hours > 0 {
-            return String(format: "%dh %dm", hours, minutes)
-        } else {
-            return String(format: "%dm", minutes)
-        }
-    }
-    
-    private var dateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
-    }
-}
 
 #Preview {
     DashboardView(dataManager: DataManager())
