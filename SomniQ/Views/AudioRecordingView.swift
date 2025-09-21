@@ -3,7 +3,7 @@ import AVFoundation
 
 struct AudioRecordingView: View {
     @ObservedObject var dataManager: DataManager
-    @StateObject private var audioManager = AudioManager()
+    @ObservedObject var audioManager: AudioManager
     @Environment(\.dismiss) private var dismiss
     @State private var showingPermissionAlert = false
     @State private var showingSaveAlert = false
@@ -460,5 +460,5 @@ struct RecordingSummaryView: View {
 
 
 #Preview {
-    AudioRecordingView(dataManager: DataManager())
+    AudioRecordingView(dataManager: DataManager(), audioManager: AudioManager())
 } 

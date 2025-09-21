@@ -33,6 +33,9 @@ class SoundAnalysisManager: NSObject, ObservableObject {
     private var classifySoundRequest: SNClassifySoundRequest?
     private var allDetections: [DetectedSound] = []
     
+    // MARK: - Alert Processing Data
+    @Published var lastFrameData: (time: TimeInterval, probs: [String: Double], top2: (String, Double, String, Double))?
+    
     override init() {
         super.init()
         setupSoundClassifier()
@@ -102,6 +105,7 @@ class SoundAnalysisManager: NSObject, ObservableObject {
             fileURL: fileURL
         )
     }
+    
 }
 
 // MARK: - Sound Analysis Observer
@@ -117,10 +121,32 @@ extension SoundAnalysisManager: SNResultsObserving {
         let timestamp = classificationResult.timeRange.start.seconds
         print("Received classification result at timestamp: \(timestamp)")
         
-        // Get top classifications with confidence > 0.5 (50% threshold)
-        let topClassifications = classificationResult.classifications
-            .filter { $0.confidence > 0.5 }
+        // Get ALL classifications for alert processing (not just high confidence ones)
+        let allClassifications = classificationResult.classifications
             .sorted { $0.confidence > $1.confidence }
+        
+        // Convert to probability dictionary for alert processing
+        var probs: [String: Double] = [:]
+        for classification in allClassifications {
+            probs[classification.identifier] = Double(classification.confidence)
+        }
+        
+        // Get top 2 classifications for uncertainty calculation
+        let top2 = allClassifications.count >= 2 ? 
+            (allClassifications[0].identifier, Double(allClassifications[0].confidence),
+             allClassifications[1].identifier, Double(allClassifications[1].confidence)) :
+            (allClassifications[0].identifier, Double(allClassifications[0].confidence),
+             "unknown", 0.0)
+        
+        // Store frame data for alert processing
+        DispatchQueue.main.async {
+            self.lastFrameData = (time: timestamp, probs: probs, top2: top2)
+        }
+        
+        // Continue with existing sound detection logic (for UI display)
+        // Get top classifications with confidence > 0.5 (50% threshold)
+        let topClassifications = allClassifications
+            .filter { $0.confidence > 0.5 }
             .prefix(3)
         
         print("Found \(topClassifications.count) classifications above threshold")
@@ -169,18 +195,24 @@ class AudioManager: NSObject, ObservableObject {
     @Published var isUploading = false
     @Published var uploadError: String?
     
+    // MARK: - Alert System Properties
+    @Published var activeAlerts: [AlertEvent] = []
+    @Published var alertHistory: [AlertEvent] = []
+    
     private var audioEngine: AVAudioEngine?
     private var audioFile: AVAudioFile?
     private var recordingTimer: Timer?
     private var recordingStartTime: Date?
     private var outputFileURL: URL?
     private let soundAnalysisManager = SoundAnalysisManager()
+    private let alertProcessor = AlertProcessor(profile: .balanced)
     private let storage = Storage.storage()
     
     override init() {
         super.init()
         checkPermission()
         setupSoundAnalysisObserver()
+        setupAlertObserver()
     }
     
     private func setupSoundAnalysisObserver() {
@@ -188,6 +220,35 @@ class AudioManager: NSObject, ObservableObject {
             .receive(on: DispatchQueue.main)
             .assign(to: &$detectedSounds)
     }
+    
+    private func setupAlertObserver() {
+        alertProcessor.$activeAlerts
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$activeAlerts)
+        
+        alertProcessor.$alertHistory
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$alertHistory)
+        
+        // Observe frame data from SoundAnalysisManager and process alerts
+        soundAnalysisManager.$lastFrameData
+            .receive(on: DispatchQueue.main)
+            .compactMap { $0 } // Only process non-nil frame data
+            .sink { [weak self] frameData in
+                let firedAlerts = self?.alertProcessor.processFrame(
+                    time: frameData.time,
+                    probs: frameData.probs,
+                    top2: frameData.top2
+                ) ?? []
+                
+                if !firedAlerts.isEmpty {
+                    print("🚨 Alerts fired: \(firedAlerts)")
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Permission
     func checkPermission() {
@@ -256,6 +317,9 @@ class AudioManager: NSObject, ObservableObject {
             
             // Start sound analysis
             soundAnalysisManager.startAnalysis(with: engine)
+            
+            // Reset alerts for new recording session
+            resetAlerts()
             
             inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] (buffer, time) in
                 guard let self = self else { return }
@@ -468,6 +532,61 @@ class AudioManager: NSObject, ObservableObject {
                 completion(.failure(error))
             }
         }
+    }
+    
+    // MARK: - Alert Management
+    /// Clear a specific alert from active alerts
+    /// - Parameter alertId: UUID of the alert to clear
+    func clearAlert(_ alertId: UUID) {
+        alertProcessor.clearAlert(alertId)
+    }
+    
+    /// Clear all active alerts
+    func clearAllAlerts() {
+        alertProcessor.clearAllAlerts()
+    }
+    
+    /// Get the highest priority active alert
+    /// - Returns: The most important active alert, or nil if none
+    func getTopActiveAlert() -> AlertEvent? {
+        return alertProcessor.getTopActiveAlert()
+    }
+    
+    /// Update the alert rule for a specific sound class
+    /// - Parameter rule: The new AlertRule to use
+    func updateAlertRule(_ rule: AlertRule) {
+        alertProcessor.updateRule(rule)
+    }
+    
+    /// Get current statistics about the alert processor
+    /// - Returns: Dictionary with alert processor statistics
+    func getAlertStats() -> [String: Any] {
+        return alertProcessor.getStats()
+    }
+    
+    /// Reset the alert processor (useful for starting a new recording session)
+    func resetAlerts() {
+        alertProcessor.reset()
+    }
+    
+    // MARK: - Profile Management
+    /// Change the sensitivity profile for the alert system
+    /// - Parameter profile: The new sensitivity profile to use
+    func changeSensitivityProfile(to profile: SensitivityProfile) {
+        alertProcessor.changeProfile(to: profile)
+        print("🎛️ [AudioManager] Sensitivity profile changed to \(profile.rawValue)")
+    }
+    
+    /// Get the current sensitivity profile
+    /// - Returns: The current sensitivity profile
+    func getCurrentSensitivityProfile() -> SensitivityProfile {
+        return alertProcessor.getCurrentProfile()
+    }
+    
+    /// Get the current profile configuration
+    /// - Returns: The current AlertProfile configuration
+    func getCurrentProfileConfig() -> AlertProfile {
+        return alertProcessor.getCurrentProfileConfig()
     }
     
     // MARK: - Formatting
