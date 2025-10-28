@@ -205,7 +205,7 @@ class AudioManager: NSObject, ObservableObject {
     private var recordingStartTime: Date?
     private var outputFileURL: URL?
     private let soundAnalysisManager = SoundAnalysisManager()
-    private let alertProcessor = AlertProcessor(profile: .balanced)
+    private let alertProcessor = AlertProcessor()
     private let storage = Storage.storage()
     
     override init() {
@@ -552,41 +552,9 @@ class AudioManager: NSObject, ObservableObject {
         return alertProcessor.getTopActiveAlert()
     }
     
-    /// Update the alert rule for a specific sound class
-    /// - Parameter rule: The new AlertRule to use
-    func updateAlertRule(_ rule: AlertRule) {
-        alertProcessor.updateRule(rule)
-    }
-    
-    /// Get current statistics about the alert processor
-    /// - Returns: Dictionary with alert processor statistics
-    func getAlertStats() -> [String: Any] {
-        return alertProcessor.getStats()
-    }
-    
     /// Reset the alert processor (useful for starting a new recording session)
     func resetAlerts() {
         alertProcessor.reset()
-    }
-    
-    // MARK: - Profile Management
-    /// Change the sensitivity profile for the alert system
-    /// - Parameter profile: The new sensitivity profile to use
-    func changeSensitivityProfile(to profile: SensitivityProfile) {
-        alertProcessor.changeProfile(to: profile)
-        print("🎛️ [AudioManager] Sensitivity profile changed to \(profile.rawValue)")
-    }
-    
-    /// Get the current sensitivity profile
-    /// - Returns: The current sensitivity profile
-    func getCurrentSensitivityProfile() -> SensitivityProfile {
-        return alertProcessor.getCurrentProfile()
-    }
-    
-    /// Get the current profile configuration
-    /// - Returns: The current AlertProfile configuration
-    func getCurrentProfileConfig() -> AlertProfile {
-        return alertProcessor.getCurrentProfileConfig()
     }
     
     // MARK: - Formatting

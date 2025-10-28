@@ -19,9 +19,6 @@ struct DashboardView: View {
     @State private var showingHealthKit = false
     @State private var showSignOutAlert = false
     
-    // MARK: - Sensitivity Profile State
-    @State private var currentSensitivityProfile: SensitivityProfile = .balanced
-    @State private var sensitivitySliderValue: Double = 0.5
     
     var body: some View {
         NavigationView {
@@ -39,8 +36,6 @@ struct DashboardView: View {
                     // Central recording section (primary focus)
                     centralRecordingSection
                     
-                    // Alert Sensitivity Controls
-                    alertSensitivitySection
                     
                     // History access
                     historyAccessSection
@@ -439,121 +434,7 @@ struct DashboardView: View {
         return formatter
     }
     
-    // MARK: - Alert Sensitivity Section
-    private var alertSensitivitySection: some View {
-        VStack(spacing: 16) {
-            // Section Header
-            HStack {
-                Image(systemName: "slider.horizontal.3")
-                    .foregroundColor(Color.sleepAccent)
-                    .font(.title3)
-                
-                Text("Alert Sensitivity")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                
-                Spacer()
-                
-                // Current profile indicator
-                Text(currentSensitivityProfile.rawValue)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(getSensitivityColor(for: currentSensitivityProfile).opacity(0.2))
-                    )
-                    .foregroundColor(getSensitivityColor(for: currentSensitivityProfile))
-            }
-            
-            // Sensitivity Slider
-            VStack(spacing: 12) {
-                // Slider
-                HStack {
-                    Image(systemName: "minus.circle.fill")
-                        .foregroundColor(.white.opacity(0.6))
-                        .font(.title3)
-                    
-                    Slider(value: $sensitivitySliderValue, in: 0...1, step: 0.25)
-                        .accentColor(getSensitivityColor(for: currentSensitivityProfile))
-                        .onChange(of: sensitivitySliderValue) { newValue in
-                            let newProfile = SensitivityProfile.fromSliderValue(newValue)
-                            if newProfile != currentSensitivityProfile {
-                                currentSensitivityProfile = newProfile
-                                // Update AudioManager with new profile
-                                audioManager.changeSensitivityProfile(to: newProfile)
-                            }
-                        }
-                    
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.white.opacity(0.6))
-                        .font(.title3)
-                }
-                
-                // Profile Labels
-                HStack {
-                    Text("Very Conservative")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
-                    
-                    Spacer()
-                    
-                    Text("Balanced")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
-                    
-                    Spacer()
-                    
-                    Text("Very Sensitive")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
-                }
-            }
-            
-            // Profile Description
-            Text(currentSensitivityProfile.description)
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.8))
-                .multilineTextAlignment(.center)
-                .padding(.top, 4)
-        }
-        .padding()
-        .background(
-            LinearGradient(
-                gradient: Gradient(colors: [Color.sleepDarkGray, Color.sleepPrimary.opacity(0.1)]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.sleepAccent.opacity(0.2), lineWidth: 1)
-        )
-        .onAppear {
-            // Load current profile from AudioManager
-            currentSensitivityProfile = audioManager.getCurrentSensitivityProfile()
-            sensitivitySliderValue = currentSensitivityProfile.sliderValue
-        }
-    }
     
-    // MARK: - Helper Methods
-    private func getSensitivityColor(for profile: SensitivityProfile) -> Color {
-        switch profile {
-        case .veryConservative:
-            return .green
-        case .conservative:
-            return .blue
-        case .balanced:
-            return .yellow
-        case .sensitive:
-            return .orange
-        case .verySensitive:
-            return .red
-        }
-    }
 }
 
 struct StatCard: View {

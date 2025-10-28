@@ -9,188 +9,251 @@ struct AudioRecordingView: View {
     @State private var showingSaveAlert = false
     @State private var recordingName = ""
     @State private var showingSummary = false
+    @State private var showingAlertModal = false
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 30) {
-                // Header
-                VStack(spacing: 16) {
-                    Image(systemName: audioManager.isRecording ? "mic.fill" : "mic")
-                        .font(.system(size: 60))
-                        .foregroundColor(audioManager.isRecording ? .red : .blue)
-                        .scaleEffect(audioManager.isRecording ? 1.2 : 1.0)
-                        .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: audioManager.isRecording)
-                    
-                    Text(audioManager.isRecording ? "Recording..." : "Ready to Record")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    
-                    if audioManager.isRecording {
-                        Text(audioManager.formatDuration(audioManager.recordingDuration))
-                            .font(.title)
-                            .fontWeight(.bold)
+            ZStack {
+                mainContent
+                alertOverlay
+            }
+        }
+        .onChange(of: audioManager.activeAlerts) { alerts in
+            if !alerts.isEmpty && !showingAlertModal {
+                showingAlertModal = true
+            }
+        }
+    }
+    
+    private var mainContent: some View {
+        VStack(spacing: 30) {
+            headerSection
+            instructionsSection
+            soundDetectionSection
+            Spacer()
+            recordingControlsSection
+            uploadSection
+            summarySection
+        }
+        .padding()
+        .navigationTitle("Audio Recording")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
+        .alert("Microphone Permission", isPresented: $showingPermissionAlert) {
+            Button("Settings") {
+                if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(settingsURL)
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Please enable microphone access in Settings to record sleep sounds.")
+        }
+        .alert("Save Recording", isPresented: $showingSaveAlert) {
+            TextField("Recording Name", text: $recordingName)
+            Button("Save") {
+                saveRecording()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Enter a name for your sleep recording.")
+        }
+        .sheet(isPresented: $showingSummary) {
+            if let summary = audioManager.recordingSummary {
+                RecordingSummaryView(summary: summary)
+            }
+        }
+    }
+    
+    private var headerSection: some View {
+        VStack(spacing: 16) {
+            Image(systemName: audioManager.isRecording ? "mic.fill" : "mic")
+                .font(.system(size: 60))
+                .foregroundColor(audioManager.isRecording ? .red : .blue)
+                .scaleEffect(audioManager.isRecording ? 1.2 : 1.0)
+                .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: audioManager.isRecording)
+            
+            Text(audioManager.isRecording ? "Recording..." : "Ready to Record")
+                .font(.title2)
+                .fontWeight(.semibold)
+            
+            if audioManager.isRecording {
+                Text(audioManager.formatDuration(audioManager.recordingDuration))
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(.red)
+            }
+        }
+    }
+    
+    private var instructionsSection: some View {
+        VStack(spacing: 12) {
+            Text("Sleep Audio Recording")
+                .font(.headline)
+            
+            Text("Place your device near your bed to capture sleep sounds. The app will automatically detect and classify sounds like snoring, breathing, and other sleep-related audio.")
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+        }
+    }
+    
+    private var soundDetectionSection: some View {
+        Group {
+            if audioManager.isRecording {
+                RealTimeSoundDetectionView(audioManager: audioManager)
+            }
+        }
+    }
+    
+    private var recordingControlsSection: some View {
+        VStack(spacing: 20) {
+            if !audioManager.hasPermission {
+                permissionPrompt
+            } else {
+                recordingButton
+            }
+        }
+    }
+    
+    private var permissionPrompt: some View {
+        VStack(spacing: 12) {
+            Text("Microphone Permission Required")
+                .font(.headline)
+                .foregroundColor(.red)
+            
+            Text("SomniQ needs access to your microphone to record and analyze sleep sounds.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            
+            Button("Grant Permission") {
+                audioManager.requestPermission()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    private var recordingButton: some View {
+        HStack(spacing: 30) {
+            if !audioManager.isRecording {
+                Button(action: startRecording) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "record.circle")
+                            .font(.system(size: 50))
+                            .foregroundColor(.red)
+                        
+                        Text("Start Recording")
+                            .font(.headline)
                             .foregroundColor(.red)
                     }
                 }
-                
-                // Instructions
-                VStack(spacing: 12) {
-                    Text("Sleep Audio Recording")
-                        .font(.headline)
-                    
-                    Text("Place your device near your bed to capture sleep sounds. The app will automatically detect and classify sounds like snoring, breathing, and other sleep-related audio.")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
-                
-                // Real-time Sound Detection
-                if audioManager.isRecording {
-                    RealTimeSoundDetectionView(audioManager: audioManager)
-                }
-                
-                Spacer()
-                
-                // Recording controls
-                VStack(spacing: 20) {
-                    if !audioManager.hasPermission {
-                        VStack(spacing: 12) {
-                            Text("Microphone Permission Required")
-                                .font(.headline)
-                                .foregroundColor(.red)
-                            
-                            Text("SomniQ needs access to your microphone to record and analyze sleep sounds.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                            
-                            Button("Grant Permission") {
-                                audioManager.requestPermission()
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                    } else {
-                        HStack(spacing: 30) {
-                            if !audioManager.isRecording {
-                                Button(action: startRecording) {
-                                    VStack(spacing: 8) {
-                                        Image(systemName: "record.circle")
-                                            .font(.system(size: 50))
-                                            .foregroundColor(.red)
-                                        
-                                        Text("Start Recording")
-                                            .font(.headline)
-                                            .foregroundColor(.red)
-                                    }
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            } else {
-                                Button(action: stopRecording) {
-                                    VStack(spacing: 8) {
-                                        Image(systemName: "stop.circle")
-                                            .font(.system(size: 50))
-                                            .foregroundColor(.red)
-                                        
-                                        Text("Stop Recording")
-                                            .font(.headline)
-                                            .foregroundColor(.red)
-                                    }
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                        }
-                    }
-                }
-                
-                // Upload progress indicator
-                if audioManager.isUploading {
-                    VStack(spacing: 12) {
-                        HStack {
-                            Image(systemName: "icloud.and.arrow.up")
-                                .foregroundColor(.blue)
-                            Text("Uploading to Firebase Storage...")
-                                .font(.subheadline)
-                                .foregroundColor(.primary)
-                        }
-                        
-                        ProgressView(value: audioManager.uploadProgress)
-                            .progressViewStyle(LinearProgressViewStyle())
-                        
-                        Text("\(Int(audioManager.uploadProgress * 100))%")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                }
-                
-                // Upload error display
-                if let uploadError = audioManager.uploadError {
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                Button(action: stopRecording) {
                     VStack(spacing: 8) {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundColor(.red)
-                            Text("Upload Failed")
-                                .font(.subheadline)
-                                .foregroundColor(.red)
-                        }
+                        Image(systemName: "stop.circle")
+                            .font(.system(size: 50))
+                            .foregroundColor(.red)
                         
-                        Text(uploadError)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                        Text("Stop Recording")
+                            .font(.headline)
+                            .foregroundColor(.red)
                     }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
                 }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+    
+    private var uploadSection: some View {
+        VStack(spacing: 0) {
+            if audioManager.isUploading {
+                uploadProgress
+            }
+            
+            if let uploadError = audioManager.uploadError {
+                uploadErrorView
+            }
+        }
+    }
+    
+    private var uploadProgress: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "icloud.and.arrow.up")
+                    .foregroundColor(.blue)
+                Text("Uploading to Firebase Storage...")
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+            }
+            
+            ProgressView(value: audioManager.uploadProgress)
+                .progressViewStyle(LinearProgressViewStyle())
+            
+            Text("\(Int(audioManager.uploadProgress * 100))%")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    private var uploadErrorView: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundColor(.red)
+                Text("Upload Failed")
+                    .font(.subheadline)
+                    .foregroundColor(.red)
+            }
+            
+            Text(audioManager.uploadError ?? "")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    private var summarySection: some View {
+        Group {
+            if audioManager.recordingSummary != nil {
+                Button("View Recording Summary") {
+                    showingSummary = true
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var alertOverlay: some View {
+        if showingAlertModal, let alert = audioManager.getTopActiveAlert() {
+            ZStack {
+                Color.black.opacity(0.7)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        dismissAlert(alert.id)
+                    }
                 
-                // Show summary button if recording is complete
-                if let summary = audioManager.recordingSummary {
-                    Button("View Recording Summary") {
-                        showingSummary = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
-            .padding()
-            .navigationTitle("Audio Recording")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-            .alert("Microphone Permission", isPresented: $showingPermissionAlert) {
-                Button("Settings") {
-                    if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(settingsURL)
-                    }
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text("Please enable microphone access in Settings to record sleep sounds.")
-            }
-            .alert("Save Recording", isPresented: $showingSaveAlert) {
-                TextField("Recording Name", text: $recordingName)
-                Button("Save") {
-                    saveRecording()
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text("Enter a name for your sleep recording.")
-            }
-            .sheet(isPresented: $showingSummary) {
-                if let summary = audioManager.recordingSummary {
-                    RecordingSummaryView(summary: summary)
-                }
+                AlertModal(alert: alert, onDismiss: {
+                    dismissAlert(alert.id)
+                })
             }
         }
     }
@@ -234,6 +297,87 @@ struct AudioRecordingView: View {
         print("💾 Saving recording from summary: \(recording.duration)s duration, \(recording.totalDetections) sounds detected")
         dataManager.addAudioRecording(recording)
         dismiss()
+    }
+    
+    private func dismissAlert(_ alertId: UUID) {
+        // Clear the alert from AudioManager
+        audioManager.clearAlert(alertId)
+        
+        // Dismiss the modal immediately
+        showingAlertModal = false
+    }
+}
+
+// MARK: - Alert Modal
+struct AlertModal: View {
+    let alert: AlertEvent
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            // Alert Icon
+            ZStack {
+                Circle()
+                    .fill(alert.tier.color.opacity(0.2))
+                    .frame(width: 100, height: 100)
+                
+                Image(systemName: alert.tier.icon)
+                    .font(.system(size: 50))
+                    .foregroundColor(alert.tier.color)
+            }
+            .padding(.bottom, 8)
+            
+            // Alert Title
+            Text("Critical Sound Detected!")
+                .font(.title2)
+                .fontWeight(.bold)
+                .multilineTextAlignment(.center)
+            
+            // Sound Name
+            VStack(spacing: 8) {
+                Text("Sound")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text(alert.soundClass.capitalized)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .foregroundColor(alert.tier.color)
+            }
+            
+            // Confidence
+            HStack {
+                Text("Confidence:")
+                    .font(.subheadline)
+                Text("\(Int(alert.confidence * 100))%")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(alert.tier.color)
+            }
+            
+            // Timestamp
+            Text(alert.timestamp, style: .time)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+            
+            // Dismiss Button
+            Button(action: onDismiss) {
+                Text("Continue Recording")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(alert.tier.color)
+                    .cornerRadius(12)
+            }
+        }
+        .padding(32)
+        .background(Color(.systemBackground))
+        .cornerRadius(20)
+        .shadow(radius: 20)
+        .padding(40)
     }
 }
 

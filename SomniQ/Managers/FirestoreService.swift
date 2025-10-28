@@ -292,45 +292,76 @@ class FirestoreService: ObservableObject {
     
     // MARK: - Encoding/Decoding Helpers
     private func encodeEpisode(_ episode: SleepEpisode) throws -> [String: Any] {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        
-        let data = try encoder.encode(episode)
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        // Create a dictionary manually to handle URL conversion before JSON encoding
+        var episodeData: [String: Any] = [
+            "date": episode.date.timeIntervalSince1970,
+            "severity": episode.severity.rawValue,
+            "symptoms": episode.symptoms.map { $0.rawValue },
+            "notes": episode.notes,
+            "duration": episode.duration ?? NSNull()
+        ]
         
         // Convert URL to string for Firestore
-        var episodeData = json ?? [:]
         if let url = episode.audioRecordingURL {
             episodeData["audioRecordingURL"] = url.absoluteString
+        } else {
+            episodeData["audioRecordingURL"] = NSNull()
         }
         
         return episodeData
     }
     
     private func decodeEpisode(from data: [String: Any], id: String) -> SleepEpisode? {
-        var episodeData = data
-        
-        // Convert URL string back to URL
-        if let urlString = episodeData["audioRecordingURL"] as? String {
-            episodeData["audioRecordingURL"] = URL(string: urlString)
-        }
-        
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
-        
         do {
-            let jsonData = try JSONSerialization.data(withJSONObject: episodeData)
-            var episode = try decoder.decode(SleepEpisode.self, from: jsonData)
-            // Set the ID from Firestore document ID
-            episode = SleepEpisode(
-                date: episode.date,
-                severity: episode.severity,
-                symptoms: episode.symptoms,
-                notes: episode.notes,
-                duration: episode.duration,
-                audioRecordingURL: episode.audioRecordingURL
+            // Parse date
+            guard let dateTimestamp = data["date"] as? TimeInterval else {
+                print("Failed to decode episode: missing or invalid date")
+                return nil
+            }
+            let date = Date(timeIntervalSince1970: dateTimestamp)
+            
+            // Parse severity
+            guard let severityRaw = data["severity"] as? String,
+                  let severity = EpisodeSeverity(rawValue: severityRaw) else {
+                print("Failed to decode episode: missing or invalid severity")
+                return nil
+            }
+            
+            // Parse symptoms
+            let symptoms: [Symptom]
+            if let symptomsRaw = data["symptoms"] as? [String] {
+                symptoms = symptomsRaw.compactMap { Symptom(rawValue: $0) }
+            } else {
+                symptoms = []
+            }
+            
+            // Parse notes
+            let notes = data["notes"] as? String ?? ""
+            
+            // Parse duration
+            let duration: TimeInterval?
+            if let durationValue = data["duration"] as? TimeInterval {
+                duration = durationValue
+            } else {
+                duration = nil
+            }
+            
+            // Parse URL
+            let audioRecordingURL: URL?
+            if let urlString = data["audioRecordingURL"] as? String {
+                audioRecordingURL = URL(string: urlString)
+            } else {
+                audioRecordingURL = nil
+            }
+            
+            return SleepEpisode(
+                date: date,
+                severity: severity,
+                symptoms: symptoms,
+                notes: notes,
+                duration: duration,
+                audioRecordingURL: audioRecordingURL
             )
-            return episode
         } catch {
             print("Failed to decode episode: \(error)")
             return nil
@@ -338,46 +369,90 @@ class FirestoreService: ObservableObject {
     }
     
     private func encodeRecording(_ recording: AudioRecording) throws -> [String: Any] {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        
-        let data = try encoder.encode(recording)
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        
-        // Convert URL to string for Firestore
-        var recordingData = json ?? [:]
-        recordingData["fileURL"] = recording.fileURL.absoluteString
+        // Create a dictionary manually to handle URL conversion before JSON encoding
+        var recordingData: [String: Any] = [
+            "date": recording.date.timeIntervalSince1970,
+            "duration": recording.duration,
+            "fileURL": recording.fileURL.absoluteString,
+            "episodeId": recording.episodeId?.uuidString ?? NSNull(),
+            "detectedSounds": recording.detectedSounds.map { sound in
+                [
+                    "soundName": sound.soundName,
+                    "confidence": sound.confidence,
+                    "timestamp": sound.timestamp.timeIntervalSince1970
+                ]
+            },
+            "mostCommonSound": recording.mostCommonSound ?? NSNull(),
+            "totalDetections": recording.totalDetections,
+            "uniqueSoundCount": recording.uniqueSoundCount
+        ]
         
         return recordingData
     }
     
     private func decodeRecording(from data: [String: Any], id: String) -> AudioRecording? {
-        var recordingData = data
-        
-        // Convert URL string back to URL
-        if let urlString = recordingData["fileURL"] as? String,
-           let url = URL(string: urlString) {
-            recordingData["fileURL"] = url
-        }
-        
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
-        
         do {
-            let jsonData = try JSONSerialization.data(withJSONObject: recordingData)
-            var recording = try decoder.decode(AudioRecording.self, from: jsonData)
-            // Set the ID from Firestore document ID
-            recording = AudioRecording(
-                date: recording.date,
-                duration: recording.duration,
-                fileURL: recording.fileURL,
-                episodeId: recording.episodeId,
-                detectedSounds: recording.detectedSounds,
-                mostCommonSound: recording.mostCommonSound,
-                totalDetections: recording.totalDetections,
-                uniqueSoundCount: recording.uniqueSoundCount
+            // Parse date
+            guard let dateTimestamp = data["date"] as? TimeInterval else {
+                print("Failed to decode recording: missing or invalid date")
+                return nil
+            }
+            let date = Date(timeIntervalSince1970: dateTimestamp)
+            
+            // Parse duration
+            guard let duration = data["duration"] as? TimeInterval else {
+                print("Failed to decode recording: missing or invalid duration")
+                return nil
+            }
+            
+            // Parse fileURL
+            guard let urlString = data["fileURL"] as? String,
+                  let fileURL = URL(string: urlString) else {
+                print("Failed to decode recording: missing or invalid fileURL")
+                return nil
+            }
+            
+            // Parse episodeId
+            let episodeId: UUID?
+            if let episodeIdString = data["episodeId"] as? String {
+                episodeId = UUID(uuidString: episodeIdString)
+            } else {
+                episodeId = nil
+            }
+            
+            // Parse detectedSounds
+            let detectedSounds: [DetectedSound]
+            if let soundsData = data["detectedSounds"] as? [[String: Any]] {
+                detectedSounds = soundsData.compactMap { soundData in
+                    guard let soundName = soundData["soundName"] as? String,
+                          let confidence = soundData["confidence"] as? Float,
+                          let timestampValue = soundData["timestamp"] as? TimeInterval else {
+                        return nil
+                    }
+                    let timestamp = Date(timeIntervalSince1970: timestampValue)
+                    return DetectedSound(soundName: soundName, confidence: confidence, timestamp: timestamp)
+                }
+            } else {
+                detectedSounds = []
+            }
+            
+            // Parse mostCommonSound
+            let mostCommonSound = data["mostCommonSound"] as? String
+            
+            // Parse counts
+            let totalDetections = data["totalDetections"] as? Int ?? 0
+            let uniqueSoundCount = data["uniqueSoundCount"] as? Int ?? 0
+            
+            return AudioRecording(
+                date: date,
+                duration: duration,
+                fileURL: fileURL,
+                episodeId: episodeId,
+                detectedSounds: detectedSounds,
+                mostCommonSound: mostCommonSound,
+                totalDetections: totalDetections,
+                uniqueSoundCount: uniqueSoundCount
             )
-            return recording
         } catch {
             print("Failed to decode recording: \(error)")
             return nil
